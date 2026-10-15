@@ -12,10 +12,11 @@ const productionProjects = new Set(['tkhcvmkejzaoervocnzk', 'pspiqukuhtazmkyflei
 const productionHosts = new Set(['nexus.sciencebyhugs.com', 'core.sciencebyhugs.com', 'pulse.sciencebyhugs.com', 'sciencebyhugs.com', 'www.sciencebyhugs.com', 'sciencebyhugs.github.io'])
 const productionPublishableKey = 'sb_publishable_EcfrlkNHkSfJWgeSWjH2LA_3yDFTtBE'
 
-function parsedUrl(value: string | undefined, label: string): URL {
+function parsedUrl(value: string | undefined, label: string, allowNative = false): URL {
   if (!value?.trim()) throw new Error(label + ' is required for the 2.0 staging app')
   let url: URL
   try { url = new URL(value.trim()) } catch { throw new Error(label + ' must be a valid URL') }
+  if (allowNative && value?.trim() === 'capacitor://localhost') return url
   if (url.username || url.password || url.search || url.hash || !['https:', 'http:'].includes(url.protocol)) {
     throw new Error(label + ' must be an HTTP(S) URL without credentials, query or fragment')
   }
@@ -40,7 +41,7 @@ export function validateV2Environment(input: V2EnvironmentInput) {
   if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key) || key === productionPublishableKey) {
     throw new Error('A staging publishable key is required; production, secret and legacy JWT keys are not accepted')
   }
-  const origin = parsedUrl(input.appOrigin, 'VITE_APP_ORIGIN')
+  const origin = parsedUrl(input.appOrigin, 'VITE_APP_ORIGIN', true)
   if (productionHosts.has(origin.hostname)) throw new Error('Production app origins are blocked in 2.0 staging')
   if (input.paymentEnv !== 'sandbox') throw new Error('2.0 staging requires VITE_PAYMENT_ENV=sandbox')
   if (input.enableTestPayments !== undefined && !['true', 'false'].includes(input.enableTestPayments)) {
@@ -51,7 +52,7 @@ export function validateV2Environment(input: V2EnvironmentInput) {
     supabaseUrl: url.origin,
     publishableKey: key,
     projectRef: ref,
-    appOrigin: origin.origin,
+    appOrigin: origin.protocol === 'capacitor:' ? 'capacitor://localhost' : origin.origin,
     paymentEnv: 'sandbox' as const,
     enableTestPayments: input.enableTestPayments === 'true',
   }
