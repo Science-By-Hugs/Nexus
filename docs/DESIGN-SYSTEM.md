@@ -1,21 +1,15 @@
-# NEXUS — Approved celestial design
+# NEXUS design system — canonical source
 
-Approved by Anthony on October 14, 2026. Reference: `design/approved-orbit-v3.png`. CORE is outside this redesign.
+The owner designated the new [NEXUS 2.0 brand portfolio](../brand/README.md) as the source of truth on October 19, 2026. It supersedes Blue Reactor and celestial/Orbit guidance for NEXUS visual branding.
 
-The app uses the lowercase `nexus.` wordmark with a cyan dot. Research vial labels use **Science By Hugs**, white labels, black lettering, blue Hugs and blue rules, plus a research-use-only footer. Generic imagery contains no invented compound names or strengths. Existing product-specific images remain authoritative when provided.
+- [Brand guide](../brand/BRAND-GUIDE.md)
+- [Decision and approval record](../brand/DECISIONS.md)
+- [Token source](../brand/tokens/brand.tokens.json)
+- [Approved n. app symbol](../brand/assets/approved/n-dot.svg)
+- [Repository brand audit and migration register](../brand/REPOSITORY-AUDIT.md)
 
-Original generated assets live in `public/orbit-horizon-v3.png` and `public/science-by-hugs-vial-v3.png`. The approved mockup is a reference, not a rendered app screen. Live UI is HTML/CSS with the existing catalog, cart, authenticated profile and order history.
+Follow each item's recorded status: canonical location does not turn a proposal into an approved specification. The app icon visual design and documented foundations are approved; unresolved choices remain proposals.
 
-Palette: background `#020b16`, surface `#091827`, raised surface `#102235`, borders `#2b4053`, primary text `#f4f6fb`, secondary text `#a4b9d8`, cyan action `#00d3ec`. Status dots always accompany text.
+The old document is preserved as [historical celestial design guidance](design/LEGACY-CELESTIAL-DESIGN.md). Its visual and packaging statements are superseded; generated imagery is not evidence of physical packaging. Its functional behavior descriptions are historical context, not canceled product requirements. Recover the full approved product blueprint before changing navigation or workflows.
 
-Home contains a personal greeting (or a signed-out welcome), latest order, Catalog and Orders shortcuts, and one accessible catalog preview. Latest order uses actual server status and has loading, empty, failed and signed-out states. Late order responses cannot replace another profile's history. Catalog has search, category filters, and stacked horizontal cards on phones; desktop uses two columns. Restricted-product filtering is shared by Home and Catalog.
-
-Primary navigation: Home, Catalog, Orders, Account. Cart and Menu remain reachable in the header; Menu includes Support. Orders opens existing authenticated history or the sign-in sheet. Native push continues to use the existing Account controls.
-
-System typography, visible form labels, password visibility, autofill, device zoom, reduced-motion support, CSS safe-area padding and keyboard-aware sheet heights remain. Cyan actions use dark text.
-
-`src/orbit.css` is loaded after the existing styles and shared component styles. The development-only `design-review.html` and `design-review.ts` show fictional data without authentication or writes; they are excluded from the default Vite build and native bundle. Visual evidence lives in `../evidence/` at the v2 level.
-
-## Build 4 consistency pass
-
-`src/fluid.css` is the final shared layer after orbit.css. It removes excessive text tracking and legacy referral reordering, normalizes card/form spacing, wraps long names and links, and carries the celestial background through secondary views. Mobile dialogs use the full visible viewport with safe-area padding. Desktop keeps bounded sheets. The public policy page shares the same palette and typography. Customer URLs come from appLinks.ts, never from the current WebView address.
+Runtime CSS, public assets, PWA settings and native assets remain at the legacy implementation pending a separate migration. Existing code is evidence of current behavior, not current brand authority. CORE, PULSE and the parent brand are outside this NEXUS authority change.

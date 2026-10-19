@@ -17,8 +17,8 @@ A = approved foundation from the current user request or retrieved conversation.
 - ASSET-INVENTORY.csv — delivered, proposed and blocked assets.
 - CONTRAST.md — calculated palette pairings and accessibility constraints.
 
-## Recommended canonical home
-After approval and repository audit, place this package at `brand/` in ScienceByHugs/Nexus. Use `brand/README.md` as the entry point, `brand/tokens/brand.tokens.json` as the sole token source, `brand/assets/approved/` for released masters, `brand/assets/proposals/` for candidates, and `brand/releases/` for immutable snapshots. Link to it from the repository README and contributor instructions. Generate platform exports from approved tokens later; never hand-maintain duplicate values. This recommendation has not been applied to the repository.
+## Canonical source of truth
+The owner designated this portfolio at `brand/` in ScienceByHugs/Nexus as the canonical source on October 19, 2026. Use `brand/README.md` as the entry point, `brand/tokens/brand.tokens.json` as the sole token source, `brand/assets/approved/` for released masters, `brand/assets/proposals/` for candidates, and `brand/releases/` for immutable snapshots. Link to it from the repository README and contributor instructions. Generate platform exports from approved tokens later; never hand-maintain duplicate values. Repository README, contributor instructions and the legacy design-system entry point now link here.
 
 The brand owner must approve the decision record before v1.0.0. Product packaging fidelity and platform export checks remain asset-specific gates even after system approval. No trademark clearance, domain acquisition or rights registration is implied by this portfolio.
 
@@ -26,3 +26,6 @@ The brand owner must approve the decision record before v1.0.0. Product packagin
 The repository already contains `src/brand.css`, `public/brand-mark.svg` and `public/brand/brand-tokens.json` (Blue Reactor). These remain unchanged. This new directory records the NEXUS 2.0 design direction and approval status; it is not connected to runtime styling. Do not overwrite parent-brand rules or runtime tokens without a separately reviewed implementation change.
 
 The approved app symbol is [assets/approved/n-dot.svg](assets/approved/n-dot.svg). Its current geometry, Muted background and dark Slate foreground were approved by the owner. Other logo studies remain proposals or rejected history; consult LOGO-REVISION.md and DECISIONS.md. System-wide approval is still pending. Platform exports and fidelity-approved product imagery are not delivered here.
+
+## Authority and implementation
+This portfolio supersedes Blue Reactor and celestial/Orbit visual guidance for NEXUS. The current runtime is not yet migrated. Canonical authority does not approve every proposal: retain the status of each decision and token. See [REPOSITORY-AUDIT.md](REPOSITORY-AUDIT.md) for conflicts, scope and the migration register. Parent-brand, CORE and PULSE identities remain outside this change.

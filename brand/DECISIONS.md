@@ -33,3 +33,6 @@ Decision: [approve candidate / approve with listed changes / revise].
 Version: 0.1.0. P01: __ P02: __ P03: __ P04: __ P05: __ P06: __ P07: __ P08: __.
 Approver/name: __. Date: __. Exceptions: __. Packaging owner: __. Release custodian: __.
 Approval applies only to listed choices. Blocked assets cannot be relabeled approved without their own evidence and signoff. This document does not grant repository publishing or app implementation authority.
+
+## Owner authority update · October 19, 2026
+The owner stated: “The new one that we have created is the source of truth.” The new NEXUS 2.0 portfolio is canonical and supersedes earlier Blue Reactor/celestial visual guidance for NEXUS. This establishes source precedence; it does not silently approve unresolved P01/P03–P08 choices, validate physical packaging, or implement a runtime redesign. P02 app icon visual design is already approved. The canonical repository location is now established, rather than merely recommended.
