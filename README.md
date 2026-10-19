@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/brand/nexus.svg" alt="NEXUS — Science By Hugs" width="700" />
+  <img src="brand/assets/approved/n-dot.svg" alt="NEXUS — approved n. app symbol" width="120" />
 </p>
 
 <h3 align="center">Explore. Connect. Order.</h3>
@@ -25,7 +25,9 @@ NEXUS is the customer-facing Science By Hugs experience for research catalog acc
 **NEXUS · SCIENCE BY HUGS**  
 **Explore. Connect. Order.**
 
-NEXUS uses the Science By Hugs **Blue Reactor** system with cobalt and cyan orbital/reactor accents.
+The [NEXUS 2.0 brand portfolio](brand/README.md) is the canonical source of truth, designated by the owner on October 19, 2026. The Slate system and approved lowercase **n.** icon supersede Blue Reactor and celestial/Orbit visual guidance for NEXUS.
+
+See the [brand guide](brand/BRAND-GUIDE.md), [approval record](brand/DECISIONS.md), and [brand audit](brand/REPOSITORY-AUDIT.md). Follow recorded approval statuses; remaining proposals need approval. The current app still uses legacy assets pending a separate implementation migration. The legacy “Explore. Connect. Order.” tagline above is retained as historical product copy, not a newly approved brand tagline.
 
 ### Platform
 
@@ -34,7 +36,7 @@ NEXUS uses the Science By Hugs **Blue Reactor** system with cobalt and cyan orbi
 - Installable PWA
 - Responsive mobile and desktop interface
 - Automatic PWA update workflow
-- Science By Hugs Blue Reactor v2 branding
+- Canonical NEXUS 2.0 Slate brand portfolio; runtime migration pending
 
 ### Development
 
