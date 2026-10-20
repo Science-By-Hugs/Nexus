@@ -41,3 +41,9 @@ The iOS icon and launch raster exports derive directly from the approved vector,
 Run `npm ci`, configure the existing staging environment, then `npm run build`, `npm test`, `npm run verify:staging`, and `npm run ios:sync`. `npm run brand:generate` refreshes only approved colors and the SVG symbol copy. Optional raster regeneration: install Sharp 0.34.x locally and run `node scripts/export-brand-assets.cjs`; `NEXUS_SHARP_MODULE` may point to an existing Sharp module. The checked-in raster assets do not require Sharp to build.
 
 For responsive preview verification, run the local development server and `node scripts/verify-brand-preview.cjs` with Playwright available. Optional `NEXUS_PLAYWRIGHT_MODULE` and `NEXUS_CHROME_PATH` select installed tools. Preview screenshots are in `docs/review/nexus-ios-slate/` and deliberately show the fixture's review controls on non-modal screens.
+
+## Release authorization and CI repair · October 20, 2026
+
+The owner explicitly requested merge, deploy and submission after reviewing this PR. The existing internal TestFlight track remains the target. App Store Connect was inspected: build 9 is the latest visible build, so this release uses 2.0.0 (10).
+
+The three failing unit tests now read a documented, unchanged snapshot of the existing staging Apple-onboarding handler from `tests/fixtures/staging-backend/` rather than a missing sibling checkout. All 64 unit tests pass. These are mocked contract tests; no claim of live-backend or physical-device integration coverage is added. No backend function is deployed by this repair.
