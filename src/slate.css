@@ -1,0 +1,69 @@
+/* NEXUS runtime migration. Keep existing layout, type scale, flow and safe areas.
+   A02 palette + A03 flat surfaces/porcelain actions; no proposed numeric tokens. */
+@import './slate.tokens.css';
+:root {
+ color-scheme:dark;
+ --bg:var(--nexus-background);--surface:var(--nexus-surface);--surface2:var(--nexus-surface);
+ --text:var(--nexus-text);--muted:var(--nexus-muted);--line:var(--nexus-muted);
+ --blue:var(--nexus-text);--blue2:var(--nexus-text);
+ --sbh-jet:var(--bg);--sbh-white:var(--text);--sbh-surface:var(--surface);--sbh-surface-2:var(--surface);
+ --sbh-muted:var(--muted);--sbh-cobalt:var(--text);--sbh-cyan:var(--text);--sbh-line:var(--line);
+ --sbh-gradient:var(--text);--sbh-glow:none;
+}
+html,body {background:var(--bg);color:var(--text)}
+body::before,.stars,.hero::before,.hero::after,.entry-gate-backdrop,.entry-gate-atom {display:none!important}
+/* High specificity retires the old layered orbit/auth paint without moving controls. */
+#app :is(dialog,.entry-gate),dialog.biometric-lock,dialog.photo-crop-dialog {background:var(--bg)!important;color:var(--text);box-shadow:none!important}
+#app :is(.topbar,.mobile-bottom-nav),#staging-environment-label {background:var(--nexus-navigation)!important;color:var(--muted);backdrop-filter:none}
+#app :is(.product-card,.home-product-card,.home-shortcuts>button,.latest-order,.menu-card,.account-hub-card,.checkout-panel,.history-card,.account-data>div,.push-panel,.avatar-panel,.marketing-consent,.biometric-settings,.entry-gate-card,.entry-gate-notice,.entry-policy-details,.entry-gate-check,.referral-explainer,.referral-code-card,.referral-stats>div,.referral-progress-card,.referral-milestone,.membership-card,.communication-preferences,.research-notice,.activation-note,.account-hub-icon,.dialog-close,.referral-close-button,.cart-row) {
+ background:var(--surface)!important;border-color:var(--line)!important;box-shadow:none!important;color:var(--text);
+}
+#app :is(input:not([type=checkbox]):not([type=radio]),textarea,select,.search),.biometric-lock button {
+ background:var(--surface)!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:none!important;
+}
+#app :is(input,textarea)::placeholder {color:var(--muted);opacity:1}
+#app :is(.auth-form label,.account-copy,.auth-switch,.auth-divider,.password-visibility,.home-shortcuts>button>svg:first-child,.latest-order-copy small,.latest-order-copy>span,.account-hub-card small,.entry-gate-intro,.entry-gate-footnote),.biometric-lock p {color:var(--muted)!important}
+#app :is(.auth-primary,.request-invoice-button,.add-cart-button,.entry-gate-enter):not(:disabled),.biometric-lock .auth-primary {
+ background:var(--text)!important;color:var(--nexus-navigation)!important;border-color:var(--text)!important;box-shadow:none!important;
+}
+#app :is(.auth-secondary,.account-button,.cart-button,.chip) {background:var(--surface)!important;color:var(--text);border-color:var(--line)!important;box-shadow:none}
+#app .chip.active {background:var(--text)!important;color:var(--nexus-navigation)!important;text-decoration:underline;text-underline-offset:3px}
+#app .mobile-nav-item {background:transparent!important;color:var(--muted)}
+#app .mobile-nav-item.active {color:var(--text);text-decoration:underline;text-underline-offset:4px}
+#app :is(.text-action,.auth-link,.dialog-price,.wordmark-dot,.auth-status-pill) {color:var(--text)!important}
+#app .auth-status-pill {background:var(--surface)}
+#app :is(.auth-divider::before,.auth-divider::after) {background:var(--line)!important}
+#app :is(.product-image,.dialog-image) {background:transparent!important}
+#app :is(.product-card:hover,.home-product-card:hover) {transform:none;box-shadow:none}
+#app :is(.auth-primary,.request-invoice-button,.add-cart-button,.entry-gate-enter):disabled {background:var(--surface)!important;color:var(--muted)!important;border-color:var(--muted)!important}
+#app :focus-visible,.biometric-lock :focus-visible {outline:2px solid var(--text)!important;outline-offset:3px}
+#app input:focus {border-color:var(--text)!important;outline-color:var(--text)!important}
+/* Keep Apple provider artwork and its existing black/white button intact. */
+#app #signedOutView .apple-signin-button {background:#000;color:#fff;border-color:var(--muted)}
+#app .minimal-wordmark {color:var(--text)}
+#app .minimal-wordmark .wordmark-dot {display:none} /* Permanent wordmark dot remains P01. */
+#app .entry-gate-logo.minimal-wordmark {background:transparent}
+#app .minimal-wordmark>span {display:block;color:var(--muted)}
+@media(prefers-reduced-motion:reduce) {
+ #app *,#app *::before,#app *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+/* Use the application's existing system fallback; retain all current size/weight rules. */
+:root {--sbh-heading:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--sbh-body:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-family:var(--sbh-body)}
+#app :is(.sheet-topbar,.subpage-header,.policy-dialog-header,.referral-dialog-header) {background:var(--nexus-navigation)!important;border-color:var(--line)!important}
+#app :is(.support-action-card,.support-info-card,.support-action-icon,.policy-card,.referral-link,.account-benefit-chip,.profile-avatar,.quantity-control button,.back-button,.subpage-back,.referral-back-button,.policy-back-button) {background:var(--surface)!important;border-color:var(--line)!important;color:var(--text)!important;box-shadow:none}
+#app :is(.policy-chevron,.support-action-card span,.support-action-card small,.support-info-card p,.policy-card summary small,.summary-row>span,.server-note) {color:var(--muted)!important}
+#app :is(.auth-divider)::before,#app :is(.auth-divider)::after {background:var(--line)!important}
+#app :is(.referral-progress,.dialog-image) {background:var(--surface)!important}
+#app .referral-progress>i {background:var(--text)!important}
+#app .minimal-wordmark {flex-direction:column;align-items:flex-start;gap:0}
+#app .minimal-wordmark>span {letter-spacing:1px;white-space:nowrap}
+#app :is(.marketing-consent legend,.marketing-consent a,.profile-photo-actions button,.photo-crop-dialog label) {color:var(--text)!important}
+#app .profile-photo-actions button {background:var(--surface)!important;border-color:var(--line)!important}
+#app :is(.profile-photo-controls p,.profile-photo-controls small,.marketing-consent p) {color:var(--muted)!important}
+#app .availability::before {background:var(--muted)}
+#app :is(input[type=checkbox],input[type=radio],input[type=range]) {accent-color:var(--text)}
+#app .subpage-back-button {background:var(--surface)!important;color:var(--text)!important;border-color:var(--line)!important}
+#app .entry-policy-details summary {color:var(--text)!important}
+#app .entry-gate-exit {background:var(--surface)!important;border-color:var(--line)!important;color:var(--muted)!important}
+#app .entry-gate-enter:disabled {opacity:1}
+:root {--cyan:var(--nexus-text)}

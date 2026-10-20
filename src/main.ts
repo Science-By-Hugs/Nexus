@@ -21,6 +21,7 @@ import './fluid.css'
 import './refinement.css'
 import './compact.css'
 import './authRedesign.css'
+import './slate.css'
 import { registerSW } from 'virtual:pwa-register'
 import { fetchCatalog, type CatalogProduct } from './services/catalog'
 import {
@@ -170,7 +171,7 @@ app.innerHTML = `
   <section id="entryGate" class="entry-gate" aria-labelledby="entryGateTitle" style="--entry-vial:url('${defaultProductImageUrl}')" ${hasValidEntryAcknowledgment() ? 'hidden' : ''}>
     <div class="entry-gate-backdrop" aria-hidden="true"></div>
     <div class="entry-gate-card">
-      <span class="entry-gate-logo minimal-wordmark" aria-label="Nexus">nexus<b class="wordmark-dot">.</b></span>
+      <span class="entry-gate-logo minimal-wordmark" aria-label="Nexus">NEXUS<b class="wordmark-dot">.</b></span>
       <div class="entry-gate-atom" aria-hidden="true">⚛</div>
       <span class="entry-gate-kicker">RESEARCH ACCESS CONFIRMATION</span>
       <h1 id="entryGateTitle">Before entering <em>Nexus.</em></h1>
@@ -222,7 +223,7 @@ app.innerHTML = `
 
   <header class="topbar">
     <a class="brand" href="#" aria-label="Science By Hugs Nexus home">
-      <span class="minimal-wordmark">nexus<b class="wordmark-dot">.</b><span>SCIENCE BY HUGS</span></span>
+      <span class="minimal-wordmark">NEXUS<b class="wordmark-dot">.</b><span>by Science By Hugs</span></span>
     </a>
 
     <div class="top-actions">
