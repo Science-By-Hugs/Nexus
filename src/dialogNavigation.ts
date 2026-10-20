@@ -24,7 +24,7 @@ export function bindSheetHeaders(root: ParentNode = document) {
       const wordmark = document.createElement('span')
       wordmark.className = 'auth-sheet-wordmark minimal-wordmark'
       wordmark.setAttribute('aria-label', 'Nexus')
-      wordmark.innerHTML = 'nexus<b class="wordmark-dot">.</b>'
+      wordmark.textContent = 'NEXUS'
       header.append(wordmark)
     }
     header.append(label, close)

@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --mode staging",
-    "build": "tsc && vite build --mode staging",
+    "build": "npm run brand:generate && tsc && vite build --mode staging",
     "preview": "vite preview",
     "test": "node --test tests/*.test.cjs",
     "verify:staging": "node scripts/verify-staging-build.mjs",
     "build:ios": "VITE_APP_ORIGIN=capacitor://localhost npm run build",
-    "ios:sync": "npm run build:ios && cap sync ios"
+    "ios:sync": "npm run build:ios && cap sync ios",
+    "brand:generate": "node scripts/generate-brand.mjs"
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",
