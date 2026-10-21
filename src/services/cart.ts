@@ -18,7 +18,7 @@ export type CartTotals = {
   total: number
 }
 
-const STORAGE_KEY = 'sbhNexusCart'
+const STORAGE_KEY = 'sbhNexusStagingCartV2'
 
 export const SHIPPING_RATES: Record<string, number> = {
   'Shipping - Emlin (L)': 70,
@@ -34,7 +34,7 @@ export const SHIPPING_RATES: Record<string, number> = {
 export function loadCart(): CartItem[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.id === 'string' && typeof item.product === 'string' && Number.isFinite(item.price) && item.price > 0 && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 100) : []
   } catch {
     return []
   }
@@ -49,10 +49,13 @@ export function clearCart() {
 }
 
 export function addProduct(cart: CartItem[], product: CatalogProduct): CartItem[] {
+  const stock = product.available_to_sell ?? 0
+  if (!Number.isInteger(stock) || stock < 1 || !Number.isFinite(product.price) || product.price <= 0) return cart
   const next = cart.map(item => ({ ...item }))
   const existing = next.find(item => item.id === product.id)
 
   if (existing) {
+    if (existing.quantity >= Math.min(stock, 100)) return cart
     existing.quantity += 1
   } else {
     next.push({
@@ -126,4 +129,16 @@ export function calculateCart(cart: CartItem[], foundingMember: boolean, applied
 
 export function cartQuantity(cart: CartItem[]) {
   return cart.reduce((total, item) => total + item.quantity, 0)
+}
+
+// Reconcile saved lines whenever the authoritative catalog refreshes.
+export function reconcileCart(cart: CartItem[], products: CatalogProduct[]): CartItem[] {
+  const next = cart.flatMap(item => {
+    const product = products.find(product => product.id === item.id)
+    const stock = product?.available_to_sell ?? 0
+    if (!product || stock < 1 || !Number.isFinite(product.price) || product.price <= 0) return []
+    return [{ ...item, product: product.name, price: product.price, shippingFrom: product.shipping_from || '', quantity: Math.min(item.quantity, stock, 100) }]
+  })
+  saveCart(next)
+  return next
 }

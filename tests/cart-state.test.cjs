@@ -3,8 +3,8 @@ test('quantity changes survive reload and removal preserves other cart lines and
  const values=new Map(),context={exports:{},localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)}}
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/services/cart.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,context)
  const c=context.exports
- let cart=c.addProduct([],{id:'a',name:'A',price:40,shipping_from:'Shipping Gigi'})
- cart=c.addProduct(cart,{id:'b',name:'B',price:20,shipping_from:'Shipping Gigi'})
+ let cart=c.addProduct([],{id:'a',name:'A',price:40,available_to_sell:10,shipping_from:'Shipping Gigi'})
+ cart=c.addProduct(cart,{id:'b',name:'B',price:20,available_to_sell:10,shipping_from:'Shipping Gigi'})
  cart=c.changeQuantity(cart,'a',1)
  assert.equal(c.loadCart().find(x=>x.id==='a').quantity,2)
  assert.equal(c.calculateCart(cart,false).subtotal,100)

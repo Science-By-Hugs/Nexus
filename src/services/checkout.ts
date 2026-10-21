@@ -59,3 +59,21 @@ export async function createCheckoutOrder(
 
   return data as CheckoutOrderResult
 }
+
+export type SandboxOrder = { id: string; order_number: string; total: number; sandbox: true }
+export async function submitSandboxOrder(cart: CartItem[], options: { city: string; idempotencyKey: string }): Promise<SandboxOrder> {
+  if (!cart.length) throw new Error('Your cart is empty.')
+  const { data, error } = await supabase.rpc('staging_submit_order', {
+    p_items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, unit_price: item.price })),
+    p_idempotency_key: options.idempotencyKey,
+    p_city: options.city,
+  })
+  if (error) throw new Error(error.message || 'Could not reserve this sandbox order.')
+  if (!data?.id || data.sandbox !== true) throw new Error('Unexpected sandbox order response.')
+  return data as SandboxOrder
+}
+
+export async function cancelSandboxOrder(orderId: string): Promise<void> {
+  const { error } = await supabase.rpc('staging_cancel_order', { p_order_id: orderId })
+  if (error) throw new Error(error.message || 'Could not cancel this sandbox reservation.')
+}
