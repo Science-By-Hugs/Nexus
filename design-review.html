@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>NEXUS Design Review</title><link rel="stylesheet" href="/src/styles.css"><link rel="stylesheet" href="/src/brand.css"><link rel="stylesheet" href="/src/avatar.css"><link rel="stylesheet" href="/src/marketing.css"><link rel="stylesheet" href="/src/minimal.css"><link rel="stylesheet" href="/src/orbit.css"><link rel="stylesheet" href="/src/fluid.css"><link rel="stylesheet" href="/src/refinement.css"><link rel="stylesheet" href="/src/appleSignIn.css"><link rel="stylesheet" href="/src/biometricUnlock.css"><link rel="stylesheet" href="/src/compact.css"><style>.review-controls{position:relative;z-index:10001;top:0;left:0;right:0;background:#172332;display:flex;flex-wrap:wrap;gap:6px;overflow:visible;padding:8px}.review-controls button{color:#edf2fa;background:#263247;border:0;border-radius:8px;font:12px system-ui;padding:8px 10px;white-space:nowrap}body{padding-top:0}.review-label{font:10px system-ui;color:#a0afc4;text-align:center;padding:6px}#app #signedOutView .apple-signin-button:disabled{opacity:1}</style><link rel="stylesheet" href="/src/authRedesign.css"><link rel="stylesheet" href="/src/slate.css"></head><body class="native-app"><nav class="review-controls" aria-label="Preview screens"><button type="button" data-preview="Home">Home</button><button type="button" data-preview="Home signed out">Home signed out</button><button type="button" data-preview="Catalog">Catalog</button><button type="button" data-preview="Sign in">Sign in</button><button type="button" data-preview="Apple profile">Apple profile</button><button type="button" data-preview="Account">Account</button><button type="button" data-preview="Orders">Orders</button><button type="button" data-preview="Cart">Cart</button><button type="button" data-preview="Product">Product</button><button type="button" data-preview="Menu">Menu</button><button type="button" data-preview="Manage">Manage Account</button><button type="button" data-preview="Membership">Membership</button><button type="button" data-preview="Referrals">Referrals</button><button type="button" data-preview="Support">Support</button><button type="button" data-preview="Policies">Policies</button></nav><div class="review-label">DESIGN PREVIEW · FICTIONAL DATA · NO ACCOUNT ACTIONS</div><div id="app">
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>NEXUS Design Review</title><link rel="stylesheet" href="/src/avatar.css"><link rel="stylesheet" href="/src/marketing.css"><link rel="stylesheet" href="/src/appleSignIn.css"><link rel="stylesheet" href="/src/biometricUnlock.css"><style>.review-controls{position:relative;z-index:10001;top:0;left:0;right:0;background:#172332;display:flex;flex-wrap:wrap;gap:6px;overflow:visible;padding:8px}.review-controls button{color:#edf2fa;background:#263247;border:0;border-radius:8px;font:12px system-ui;padding:8px 10px;white-space:nowrap}body{padding-top:0}.review-label{font:10px system-ui;color:#a0afc4;text-align:center;padding:6px}#app #signedOutView .apple-signin-button:disabled{opacity:1}</style><link rel="stylesheet" href="/src/slate.css"></head><body class="native-app"><nav class="review-controls" aria-label="Preview screens"><button type="button" data-preview="Home">Home</button><button type="button" data-preview="Home signed out">Home signed out</button><button type="button" data-preview="Catalog">Catalog</button><button type="button" data-preview="Sign in">Sign in</button><button type="button" data-preview="Apple profile">Apple profile</button><button type="button" data-preview="Account">Account</button><button type="button" data-preview="Orders">Orders</button><button type="button" data-preview="Cart">Cart</button><button type="button" data-preview="Product">Product</button><button type="button" data-preview="Menu">Menu</button><button type="button" data-preview="Manage">Manage Account</button><button type="button" data-preview="Membership">Membership</button><button type="button" data-preview="Referrals">Referrals</button><button type="button" data-preview="Support">Support</button><button type="button" data-preview="Policies">Policies</button></nav><div class="review-label">DESIGN PREVIEW · FICTIONAL DATA · NO ACCOUNT ACTIONS</div><div id="app">
   <section id="entryGate" class="entry-gate" aria-labelledby="entryGateTitle" style="--entry-vial:url('/science-by-hugs-vial-v3.png')" >
     <div class="entry-gate-backdrop" aria-hidden="true"></div>
     <div class="entry-gate-card">
@@ -812,7 +812,7 @@ Material program changes will be communicated as appropriate. A policy update do
     <div class="cart-heading">
       <span class="eyebrow">NEXUS CHECKOUT</span>
       <h2>Your research cart.</h2>
-      <p>Review your items. Checkout and invoice requests are unavailable in this early build.</p>
+      <p>Review verified items and place a sandbox reservation. No payment or dispatch occurs.</p>
     </div>
 
     <div id="cartEmpty" class="cart-empty">
@@ -827,10 +827,10 @@ Material program changes will be communicated as appropriate. A policy update do
       <section class="checkout-panel">
         <div class="checkout-title">Order Summary</div>
         <div class="summary-row"><span>Subtotal</span><strong id="cartSubtotal">$0.00</strong></div>
-        <div class="summary-row"><span id="cartDiscountLabel">Discounts</span><strong id="cartDiscount">-$0.00</strong></div>
-        <div class="summary-row"><span>Shipping</span><strong id="cartShipping">$0.00</strong></div>
-        <div class="summary-row"><span>Sales Tax (8%)</span><strong id="cartTax">$0.00</strong></div>
-        <div class="summary-row"><span>Processing fee (5%)</span><strong id="cartProcessingFee">$0.00</strong></div>
+        <div class="summary-row" hidden><span id="cartDiscountLabel">Discounts</span><strong id="cartDiscount">-$0.00</strong></div>
+        <div class="summary-row" hidden><span>Shipping</span><strong id="cartShipping">$0.00</strong></div>
+        <div class="summary-row" hidden><span>Sales Tax (8%)</span><strong id="cartTax">$0.00</strong></div>
+        <div class="summary-row" hidden><span>Processing fee (5%)</span><strong id="cartProcessingFee">$0.00</strong></div>
         <div class="summary-row total-row"><span>Total</span><strong id="cartTotal">$0.00</strong></div>
         <div class="server-note">Final pricing is revalidated securely when the request is submitted.</div>
       </section>
@@ -848,7 +848,7 @@ Material program changes will be communicated as appropriate. A policy update do
           <div class="customer-detail" id="checkoutCustomerEmail">—</div>
           <div class="customer-detail" id="checkoutCustomerPhone">—</div>
 
-          <label class="checkout-field">
+          <label class="checkout-field" hidden>
             Preferred Contact
             <select id="contactMethod">
               <option value="">Choose one</option>
@@ -858,14 +858,14 @@ Material program changes will be communicated as appropriate. A policy update do
             </select>
           </label>
 
-          <label class="checkout-field">
+          <label class="checkout-field" hidden>
             Notes for this order
             <textarea id="customerNotes" rows="3" maxlength="500" placeholder="Optional"></textarea>
           </label>
         </div>
       </section>
 
-      <section class="checkout-panel discount-code-panel">
+      <section class="checkout-panel discount-code-panel" hidden>
         <div class="discount-code-heading">
           <div>
             <span class="eyebrow">PROMOTIONS</span>
@@ -891,7 +891,7 @@ Material program changes will be communicated as appropriate. A policy update do
         <div id="discountCodeMessage" class="discount-code-message" aria-live="polite"></div>
       </section>
 
-      <section class="policy-panel">
+      <section class="policy-panel" hidden>
         <label class="policy-check">
           <input id="policyAcknowledgment" type="checkbox" />
           <span>
@@ -900,7 +900,16 @@ Material program changes will be communicated as appropriate. A policy update do
         </label>
       </section>
 
-      <section class="checkout-choice">
+      <section class="checkout-panel sandbox-checkout">
+        <h3>Sandbox reservation</h3>
+        <p>No payment, tax, shipping charge or dispatch. This reserves verified stock for testing only; cancel from order history to release it.</p>
+        <label class="checkout-field">Local fulfillment area
+          <select id="sandboxCity"><option>Las Vegas</option><option>North Las Vegas</option><option>Henderson</option></select>
+        </label>
+        <button id="sandboxOrderButton" class="request-invoice-button" type="button">Reserve sandbox order</button>
+        <p id="sandboxOrderMessage" role="status" aria-live="polite"></p>
+      </section>
+      <section class="checkout-choice" hidden>
         <button id="payNowButton" class="request-invoice-button" type="button">
           Pay Now
         </button>

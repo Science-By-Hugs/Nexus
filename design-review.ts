@@ -26,7 +26,7 @@ const first = document.querySelector<HTMLElement>('.product-card')!
 find('#homeProductPreview').innerHTML = `<button class="home-product-card" type="button"><img src="/science-by-hugs-vial-v3.png" alt="Science By Hugs research vial"><span><strong>Synthetic Research Peptide A</strong><span class="home-product-price">$40.00</span><span class="availability">Available</span></span></button>`
 find('#dialogContent').innerHTML = `<div class="dialog-image">${first.querySelector('.product-image')!.innerHTML}</div><span class="category">Research peptides</span><h2>Synthetic Research Peptide A</h2><div class="dialog-price">$40.00</div><p class="dialog-description">A fictional catalog item for reviewing the product layout.</p><div class="research-notice">For research use only. Not for human or veterinary use. Educational information is not medical advice.</div><button type="button" class="request-invoice-button">Add to cart</button>`
 find('#cartItems').innerHTML = `<article class="cart-row"><div class="cart-copy"><strong>Synthetic Research Peptide A</strong><span>$40.00 each</span><button class="cart-remove text-action" type="button">Remove</button></div><div class="quantity-control"><button type="button">−</button><span>1</span><button type="button">+</button></div><strong class="cart-price">$40.00</strong></article>`
-for (const [id,value] of Object.entries({cartSubtotal:'$40.00',cartDiscount:'$0.00',cartShipping:'$0.00',cartTax:'$3.20',cartProcessingFee:'$0.00',cartTotal:'$43.20'})) find('#'+id).textContent=value
+for (const [id,value] of Object.entries({cartSubtotal:'$40.00',cartDiscount:'$0.00',cartShipping:'$0.00',cartTax:'$0.00',cartProcessingFee:'$0.00',cartTotal:'$40.00'})) find('#'+id).textContent=value
 const history = document.querySelector('#accountHistory') || document.querySelector('.account-history')
 if (history) history.innerHTML = `<article class="history-card"><div class="history-card-top"><div><strong class="history-number">STG-ORDER-A</strong><small>October 14, 2026</small></div><span class="history-status paid">Paid</span></div><div class="history-lines"><div class="history-line"><span>Synthetic Research Peptide A</span><strong>$40.00</strong></div></div><div class="history-delivery"><span>Delivery status</span><strong>Preparing your order</strong><small>Fictional preview data.</small></div><div class="history-total"><span>Total</span><strong>$40.00</strong></div></article>`
 function show(screen: string) {
@@ -107,3 +107,6 @@ find('#managePhone').setAttribute('value','(702) 555-1234')
 
 find('[data-biometric-status]').textContent = 'Optional whole-app unlock · Face ID, Touch ID, Android biometrics or device passcode.'
 find('[data-biometric-toggle]').textContent = 'Enable Biometric Unlock'
+
+// Imagery fixtures are intentionally absent until approved photography exists.
+document.querySelectorAll<HTMLImageElement>('.product-image img,.home-product-image img,.dialog-image img').forEach(image => { const placeholder=document.createElement('span');placeholder.className='product-image-empty';placeholder.textContent='Product photography pending';image.replaceWith(placeholder) })
