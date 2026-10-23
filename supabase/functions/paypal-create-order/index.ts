@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
+import { readJson } from "../_shared/http.ts";
+import { getAccessToken, paypalBaseUrl, paypalOrderIsUnapproved, WALLET_CREATED_STATUSES } from "../_shared/paypal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://nexus.sciencebyhugs.com",
@@ -13,36 +15,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function paypalBaseUrl() {
-  return (Deno.env.get("PAYPAL_ENV") || "sandbox").toLowerCase() === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
-}
-
-async function getAccessToken() {
-  const clientId = Deno.env.get("PAYPAL_CLIENT_ID") || "";
-  const secret = Deno.env.get("PAYPAL_CLIENT_SECRET") || "";
-  if (!clientId || !secret) throw new Error("PayPal credentials are not configured");
-
-  const auth = btoa(`${clientId}:${secret}`);
-  const response = await fetch(`${paypalBaseUrl()}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data.access_token) {
-    throw new Error("Could not authenticate with PayPal");
-  }
-
-  return data.access_token as string;
-}
-
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -144,7 +117,30 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  if (existingPayment?.status === "verified") {
+    return json({ error: "Order is already paid" }, 409);
+  }
+
+  // The payments row is keyed by order, so starting this provider would
+  // replace another provider's in-progress payment. Refuse when that would
+  // lose a reported Zelle transfer or an approved, not yet captured, wallet order.
+  if (existingPayment && existingPayment.provider !== provider && existingPayment.status === "submitted") {
+    return json({ error: `A ${existingPayment.provider} payment for this order is awaiting verification` }, 409);
+  }
+
   const accessToken = await getAccessToken();
+
+  if (
+    existingPayment &&
+    existingPayment.provider !== provider &&
+    existingPayment.provider_order_id &&
+    WALLET_CREATED_STATUSES.includes(String(existingPayment.status)) &&
+    !(await paypalOrderIsUnapproved(accessToken, existingPayment.provider_order_id))
+  ) {
+    return json({
+      error: `A ${existingPayment.provider} payment was already started for this order. Finish it or try again in a moment.`,
+    }, 409);
+  }
 
   const amount = Number(order.total || 0).toFixed(2);
 
@@ -174,7 +170,7 @@ Deno.serve(async (req: Request) => {
     }),
   });
 
-  const paypalOrder = await response.json();
+  const paypalOrder = await readJson(response);
 
   if (!response.ok || !paypalOrder?.id) {
     return json({
@@ -225,4 +221,14 @@ Deno.serve(async (req: Request) => {
     orderId: paypalOrder.id,
     provider,
   });
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser sees this error.
+    console.error("paypal-create-order failed", error instanceof Error ? error.message : error);
+    return json({ error: "Could not start checkout. Please try again." }, 500);
+  }
 });

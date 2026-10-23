@@ -1,4 +1,12 @@
 import type { CatalogProduct } from './catalog'
+import {
+  calculateTotals,
+  MAX_LINE_QUANTITY,
+  type CheckoutPaymentMethod,
+  type PricingDiscount,
+} from '../../supabase/functions/_shared/pricing.ts'
+
+export { MAX_LINE_QUANTITY }
 
 export type CartItem = {
   id: string
@@ -14,12 +22,16 @@ export type CartTotals = {
   shippingDiscount: number
   totalSavings: number
   shipping: number
+  processingFee: number
   tax: number
   total: number
 }
 
 const STORAGE_KEY = 'sbhNexusCart'
 
+// Preview rates only. Checkout totals come from create-checkout-order, which
+// reads the live rates from internal_runtime_config.
+export const FOUNDING_MEMBER_FREE_SHIPPING_SOURCE = 'Shipping Gigi'
 export const SHIPPING_RATES: Record<string, number> = {
   'Shipping - Emlin (L)': 70,
   'Shipping - Emlin (S)': 50,
@@ -53,7 +65,7 @@ export function addProduct(cart: CartItem[], product: CatalogProduct): CartItem[
   const existing = next.find(item => item.id === product.id)
 
   if (existing) {
-    existing.quantity += 1
+    existing.quantity = Math.min(MAX_LINE_QUANTITY, existing.quantity + 1)
   } else {
     next.push({
       id: product.id,
@@ -70,58 +82,35 @@ export function addProduct(cart: CartItem[], product: CatalogProduct): CartItem[
 
 export function changeQuantity(cart: CartItem[], id: string, delta: number): CartItem[] {
   const next = cart
-    .map(item => item.id === id ? { ...item, quantity: item.quantity + delta } : { ...item })
+    .map(item => item.id === id ? { ...item, quantity: Math.min(MAX_LINE_QUANTITY, item.quantity + delta) } : { ...item })
     .filter(item => item.quantity > 0)
 
   saveCart(next)
   return next
 }
 
-export type AppliedDiscount = {
-  kind: 'free_shipping' | 'referral_bonus' | 'new_customer' | 'group_buy'
-  discountPercent?: number | null
-  shippingDiscount?: number | null
-}
+export type AppliedDiscount = PricingDiscount
 
-export function calculateCart(cart: CartItem[], foundingMember: boolean, appliedDiscount?: AppliedDiscount | null): CartTotals {
-  const subtotal = cart.reduce(
-    (total, item) => total + Number(item.price || 0) * Number(item.quantity || 0),
-    0,
-  )
-
-  const shippingSources = new Set(
-    cart.map(item => item.shippingFrom?.trim()).filter(Boolean),
-  )
-
-  let shipping = 0
-
-  shippingSources.forEach(source => {
-    if (foundingMember && source.toLowerCase() === 'shipping gigi') return
-    shipping += SHIPPING_RATES[source] || 0
+// Uses the same pricing module as create-checkout-order. Without a payment
+// method the preview excludes the wallet processing fee.
+export function calculateCart(
+  cart: CartItem[],
+  foundingMember: boolean,
+  appliedDiscount?: AppliedDiscount | null,
+  paymentMethod?: CheckoutPaymentMethod | null,
+): CartTotals {
+  return calculateTotals({
+    lines: cart.map(item => ({
+      unitPrice: Number(item.price || 0),
+      quantity: Number(item.quantity || 0),
+      shippingFrom: item.shippingFrom,
+    })),
+    shippingRates: SHIPPING_RATES,
+    foundingMember,
+    foundingMemberFreeShippingSource: FOUNDING_MEMBER_FREE_SHIPPING_SOURCE,
+    discount: appliedDiscount,
+    paymentMethod,
   })
-
-  const percent = Number(appliedDiscount?.discountPercent || 0)
-  const discount = appliedDiscount && appliedDiscount.kind !== 'free_shipping'
-    ? Math.round((subtotal * percent / 100) * 100) / 100
-    : 0
-  const shippingDiscount = appliedDiscount?.kind === 'free_shipping'
-    ? Math.min(shipping, Number(appliedDiscount.shippingDiscount || 0))
-    : 0
-  shipping = Math.max(0, shipping - shippingDiscount)
-
-  const taxableMerchandise = Math.max(0, subtotal - discount)
-  const tax = taxableMerchandise * 0.08
-  const total = subtotal - discount + shipping + tax
-
-  return {
-    subtotal,
-    discount,
-    shippingDiscount,
-    totalSavings: Math.round((discount + shippingDiscount) * 100) / 100,
-    shipping,
-    tax,
-    total,
-  }
 }
 
 export function cartQuantity(cart: CartItem[]) {
