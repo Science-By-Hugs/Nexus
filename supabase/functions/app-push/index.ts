@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.1'
 import postgres from 'npm:postgres@3.4.5'
 import webpush from 'npm:web-push@3.6.7'
 import { ensureKeys, deliver, handleSubscription } from '../_shared/web-push.ts'
+import { safeEqual } from '../_shared/crypto.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' }
 const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}')
@@ -45,7 +46,8 @@ return async (req: Request) => {
   try {
     if (new URL(req.url).searchParams.get('action') === 'dispatch') {
       const secrets = await sql`select decrypted_secret from vault.decrypted_secrets where name='ecosystem_push_cron_secret' limit 1`
-      if (!secrets[0]?.decrypted_secret || req.headers.get('x-cron-key') !== secrets[0].decrypted_secret) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      const expected = secrets[0]?.decrypted_secret
+      if (!expected || !(await safeEqual(req.headers.get('x-cron-key') || '', expected))) return Response.json({ error: 'Unauthorized' }, { status: 401 })
       return Response.json(await dispatch())
     }
     return await handleSubscription(req, admin, sql, 'ecosystem', 'app_push_subscriptions', cors)

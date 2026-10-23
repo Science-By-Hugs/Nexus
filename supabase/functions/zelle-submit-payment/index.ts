@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
+import { getAccessToken, paypalOrderIsUnapproved, WALLET_CREATED_STATUSES } from "../_shared/paypal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://nexus.sciencebyhugs.com",
@@ -13,7 +14,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -89,12 +90,27 @@ Deno.serve(async (req: Request) => {
 
   const { data: existing } = await admin
     .from("payments")
-    .select("id,status,provider")
+    .select("id,status,provider,provider_order_id")
     .eq("order_id", order.id)
     .maybeSingle();
 
   if (existing?.status === "verified") {
     return json({ error: "Verified payment cannot be replaced" }, 409);
+  }
+
+  // The upsert below replaces the order's payment row. Keep a PayPal, Venmo
+  // or Apple Pay order unless PayPal confirms the payer never approved it,
+  // otherwise its capture would be rejected and the approval lost.
+  if (
+    existing &&
+    existing.provider !== "Zelle" &&
+    existing.provider_order_id &&
+    WALLET_CREATED_STATUSES.includes(String(existing.status)) &&
+    !(await paypalOrderIsUnapproved(await getAccessToken(), existing.provider_order_id))
+  ) {
+    return json({
+      error: `A ${existing.provider} payment was already started for this order. Finish it or try again in a moment.`,
+    }, 409);
   }
 
   const now = new Date().toISOString();
@@ -159,4 +175,14 @@ Deno.serve(async (req: Request) => {
     orderId: order.id,
     payment,
   });
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser sees this error.
+    console.error("zelle-submit-payment failed", error instanceof Error ? error.message : error);
+    return json({ error: "Could not record the Zelle payment. Please try again." }, 500);
+  }
 });

@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
+import { readJson } from "../_shared/http.ts";
+import { invoiceBridgeFromEnv, postToInvoiceBridge } from "../_shared/invoice-bridge.ts";
+import { getAccessToken, paypalBaseUrl } from "../_shared/paypal.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://nexus.sciencebyhugs.com",
@@ -13,9 +16,14 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const PRINCIPAL_SCIENTIST = "Principal Scientist";
+const REFERRAL_UPGRADE_THRESHOLD = 20;
+// Tiers the referral upgrade must never replace. Founding Member keeps its
+// free Gigi shipping; Principal Scientist is the upgrade target itself.
+const REFERRAL_UPGRADE_PROTECTED_TIERS = new Set(["founding member", "principal scientist"]);
 
 async function qualifyReferral(
-  admin: ReturnType<typeof createClient>,
+  admin: ReturnType<typeof createClient<any>>,
   customerId: string | null,
   orderNumber: string | null,
 ) {
@@ -31,7 +39,7 @@ async function qualifyReferral(
 
   const qualifiedAt = new Date().toISOString();
 
-  const { error: qualifyError } = await admin
+  const { data: qualified, error: qualifyError } = await admin
     .from("referrals")
     .update({
       status: "qualified",
@@ -41,53 +49,56 @@ async function qualifyReferral(
       updated_at: qualifiedAt,
     })
     .eq("id", referral.id)
-    .is("qualified_at", null);
+    .is("qualified_at", null)
+    .select("id");
 
-  if (qualifyError) return;
+  // Another capture already qualified this referral.
+  if (qualifyError || !qualified?.length) return;
 
+  // Count only referrals qualified up to this one. Exactly one capture sees
+  // the threshold being crossed, so the upgrade happens once even when two
+  // captures run at the same time, and later referrals never repeat it.
   const { count } = await admin
     .from("referrals")
     .select("id", { count: "exact", head: true })
     .eq("referrer_id", referral.referrer_id)
-    .not("qualified_at", "is", null);
+    .not("qualified_at", "is", null)
+    .lte("qualified_at", qualifiedAt);
 
-  if ((count || 0) >= 20) {
-    const { data: membership } = await admin
-      .from("memberships")
-      .select("id")
-      .eq("name", "Principal Scientist")
-      .maybeSingle();
+  if (count !== REFERRAL_UPGRADE_THRESHOLD) return;
 
-    if (membership?.id) {
-      await admin
-        .from("profiles")
-        .update({ membership_id: membership.id })
-        .eq("id", referral.referrer_id);
-    }
+  const { data: referrer } = await admin
+    .from("profiles")
+    .select("id,membership_id,memberships(name)")
+    .eq("id", referral.referrer_id)
+    .maybeSingle();
+
+  const currentTier = String(referrer?.memberships?.name || "").trim().toLowerCase();
+  if (!referrer || REFERRAL_UPGRADE_PROTECTED_TIERS.has(currentTier)) return;
+
+  const { data: membership } = await admin
+    .from("memberships")
+    .select("id")
+    .eq("name", PRINCIPAL_SCIENTIST)
+    .maybeSingle();
+
+  if (membership?.id) {
+    await admin
+      .from("profiles")
+      .update({ membership_id: membership.id })
+      .eq("id", referrer.id);
   }
 }
 
 
 async function finalizeBrandedInvoice(
-  admin: ReturnType<typeof createClient>,
-  bridgeKey: string,
+  admin: ReturnType<typeof createClient<any>>,
   userEmail: string,
   profile: any,
   order: any,
   provider: "PayPal" | "Venmo" | "Apple Pay",
   now: string,
 ) {
-  const { data: runtimeConfigRow, error: runtimeConfigError } = await admin
-    .from("internal_runtime_config")
-    .select("value")
-    .eq("key", "checkout")
-    .single();
-
-  const appsScriptUrl = String(runtimeConfigRow?.value?.appsScriptUrl || "").trim();
-  if (runtimeConfigError || !appsScriptUrl) {
-    throw new Error("Invoice configuration unavailable");
-  }
-
   const { data: existingInvoice } = await admin
     .from("invoices")
     .select("id,invoice_number,pdf_url")
@@ -110,6 +121,19 @@ async function finalizeBrandedInvoice(
   }
 
   try {
+    // Resolved inside the try: the payment is already captured, so a
+    // configuration problem must be recorded for review, not thrown.
+    const { data: runtimeConfigRow, error: runtimeConfigError } = await admin
+      .from("internal_runtime_config")
+      .select("value")
+      .eq("key", "checkout")
+      .single();
+
+    const invoiceBridge = runtimeConfigError ? null : invoiceBridgeFromEnv(runtimeConfigRow?.value?.appsScriptUrl);
+    if (!invoiceBridge) {
+      throw new Error("Invoice configuration unavailable");
+    }
+
     const { data: itemRows, error: itemError } = await admin
       .from("order_items")
       .select("product_id,product_code,product_name,quantity,unit_price,line_total")
@@ -128,7 +152,6 @@ async function finalizeBrandedInvoice(
     const requestToken = `nexus-paid-${order.id}`;
 
     const bridgePayload = {
-      bridgeKey,
       requestToken,
       orderId: order.id,
       paymentMethod: provider,
@@ -152,6 +175,7 @@ async function finalizeBrandedInvoice(
         unitPrice: Number(item.unit_price || 0),
         lineTotal: Number(item.line_total || 0),
       })),
+      discountCode: order.discount_code || null,
       totals: {
         subtotal: Number(order.subtotal || 0),
         discount: Number(order.discount_total || 0),
@@ -163,16 +187,8 @@ async function finalizeBrandedInvoice(
       notes: order.customer_notes || "",
     };
 
-    const sheetResponse = await fetch(
-      `${appsScriptUrl}?api=nexusInvoiceRequest`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bridgePayload),
-        redirect: "follow",
-      },
-    );
-    const sheetData = await sheetResponse.json();
+    const { response: sheetResponse, data: sheetData } =
+      await postToInvoiceBridge(invoiceBridge, "nexusInvoiceRequest", bridgePayload);
 
     if (
       !sheetResponse.ok ||
@@ -183,20 +199,11 @@ async function finalizeBrandedInvoice(
       throw new Error(sheetData?.error || "Branded invoice bridge rejected request");
     }
 
-    const pdfResponse = await fetch(
-      `${appsScriptUrl}?api=approveNexusInvoice`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bridgeKey,
-          invoiceNumber: sheetData.invoiceNumber,
-          invoiceSheet: sheetData.invoiceSheet,
-        }),
-        redirect: "follow",
-      },
-    );
-    const pdfData = await pdfResponse.json();
+    const { response: pdfResponse, data: pdfData } =
+      await postToInvoiceBridge(invoiceBridge, "approveNexusInvoice", {
+        invoiceNumber: sheetData.invoiceNumber,
+        invoiceSheet: sheetData.invoiceSheet,
+      });
 
     if (!pdfResponse.ok || !pdfData?.success || !pdfData?.pdfUrl) {
       throw new Error(pdfData?.error || "Branded invoice PDF could not be generated");
@@ -282,33 +289,7 @@ async function finalizeBrandedInvoice(
   }
 }
 
-function paypalBaseUrl() {
-  return (Deno.env.get("PAYPAL_ENV") || "sandbox").toLowerCase() === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
-}
-
-async function getAccessToken() {
-  const clientId = Deno.env.get("PAYPAL_CLIENT_ID") || "";
-  const secret = Deno.env.get("PAYPAL_CLIENT_SECRET") || "";
-  if (!clientId || !secret) throw new Error("PayPal credentials are not configured");
-
-  const auth = btoa(`${clientId}:${secret}`);
-  const response = await fetch(`${paypalBaseUrl()}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data.access_token) throw new Error("Could not authenticate with PayPal");
-  return data.access_token as string;
-}
-
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -367,7 +348,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: order, error: orderError } = await admin
     .from("orders")
-    .select("id,order_number,customer_id,subtotal,discount_total,shipping_total,processing_fee_total,tax_total,total,payment_status,customer_notes,contact_method")
+    .select("id,order_number,customer_id,subtotal,discount_total,discount_code,shipping_total,processing_fee_total,tax_total,total,payment_status,customer_notes,contact_method")
     .eq("id", orderId)
     .eq("customer_id", profile.id)
     .single();
@@ -403,7 +384,7 @@ Deno.serve(async (req: Request) => {
     },
   );
 
-  const captured = await response.json();
+  const captured = await readJson(response);
 
   if (!response.ok || captured?.status !== "COMPLETED") {
     return json({
@@ -447,20 +428,36 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Payment captured, but Science By HUGs payment sync needs review" }, 500);
   }
 
-  await admin
-    .from("orders")
-    .update({
-      payment_method: provider,
-      payment_status: "paid",
-      paid_at: now,
-      status: "processing",
-      updated_at: now,
-    })
-    .eq("id", order.id);
+  const markOrderPaid = () =>
+    admin
+      .from("orders")
+      .update({
+        payment_method: provider,
+        payment_status: "paid",
+        paid_at: now,
+        status: "processing",
+        updated_at: now,
+      })
+      .eq("id", order.id);
+
+  let { error: orderUpdateError } = await markOrderPaid();
+  if (orderUpdateError) ({ error: orderUpdateError } = await markOrderPaid());
+
+  if (orderUpdateError) {
+    // The money is captured, so report success but leave a record for review.
+    // Retrying this capture is safe: PayPal-Request-Id makes it idempotent.
+    console.error("paypal-capture-order: captured payment but could not mark order paid", order.id, orderUpdateError.message);
+    await admin
+      .from("payments")
+      .update({
+        notes: `Payment captured (${captureId || paypalOrderId}) but the order could not be marked paid: ${orderUpdateError.message}`,
+        updated_at: now,
+      })
+      .eq("id", payment.id);
+  }
 
   const invoiceSync = await finalizeBrandedInvoice(
     admin,
-    secretKeys.default,
     user.email || "",
     profile,
     order,
@@ -520,5 +517,17 @@ Deno.serve(async (req: Request) => {
     orderNumber: invoiceSync.orderNumber || order.order_number || null,
     invoicePdfReady: invoiceSync.success,
     invoiceSyncError: invoiceSync.success ? null : invoiceSync.error,
+    orderSyncError: orderUpdateError ? "Payment received; the order status is being updated by Science By HUGs." : null,
   });
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser sees this error.
+    // A capture retry is safe because PayPal-Request-Id makes it idempotent.
+    console.error("paypal-capture-order failed", error instanceof Error ? error.message : error);
+    return json({ error: "Payment could not be confirmed. Please try again." }, 500);
+  }
 });

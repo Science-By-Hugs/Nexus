@@ -47,6 +47,7 @@ import {
   changeQuantity,
   clearCart,
   loadCart,
+  MAX_LINE_QUANTITY,
   saveCart,
   type CartItem,
 } from './services/cart'
@@ -1462,9 +1463,7 @@ function renderProducts() {
     button.addEventListener('click', () => {
       const product = products.find(item => item.id === button.dataset.addId)
       if (!product) return
-      cart = addProduct(cart, product)
-      updateCartUI()
-      showToast('Added to cart')
+      addToCart(product)
     })
   })
 }
@@ -1494,12 +1493,17 @@ function openProduct(id: string) {
 
   document.querySelector<HTMLButtonElement>('#dialogAddToCart')?.addEventListener('click', () => {
     if (!available) return
-    cart = addProduct(cart, product)
-    updateCartUI()
-    showToast('Added to cart')
+    addToCart(product)
   })
 
   openDialog(productDialog)
+}
+
+function addToCart(product: CatalogProduct) {
+  const atLimit = (cart.find(item => item.id === product.id)?.quantity || 0) >= MAX_LINE_QUANTITY
+  cart = addProduct(cart, product)
+  updateCartUI()
+  showToast(atLimit ? `Limit ${MAX_LINE_QUANTITY} per product` : 'Added to cart')
 }
 
 function canViewRestrictedCatalog() {
@@ -1584,7 +1588,7 @@ function updateCartUI() {
       <div class="quantity-control">
         <button type="button" aria-label="Decrease quantity of ${escapeHtml(item.product)}" data-qty-id="${item.id}" data-delta="-1">−</button>
         <b aria-label="Quantity" aria-live="polite">${item.quantity}</b>
-        <button type="button" aria-label="Increase quantity of ${escapeHtml(item.product)}" data-qty-id="${item.id}" data-delta="1">+</button>
+        <button type="button" aria-label="Increase quantity of ${escapeHtml(item.product)}" data-qty-id="${item.id}" data-delta="1" ${item.quantity >= MAX_LINE_QUANTITY ? 'disabled' : ''}>+</button>
       </div>
       <strong class="line-total">${money(item.price * item.quantity)}</strong>
     </div>
@@ -1887,20 +1891,20 @@ async function setupCartPayNow() {
           cartPayMessage.textContent = 'Preparing secure Apple Pay checkout…'
 
           // Apple Pay must authorize the exact amount on the PayPal order.
-          // Mirror the server's wallet pricing here before Apple opens the sheet:
-          // 5% processing fee on taxable merchandise, then 8% tax on
-          // taxable merchandise + processing fee. Shipping is not taxed.
-          const preview = calculateCart(cart, isFoundingMember(), appliedDiscount)
-          const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
-          const taxableMerchandise = roundMoney(Math.max(0, preview.subtotal - preview.discount))
-          const processingFee = roundMoney(taxableMerchandise * 0.05)
-          const tax = roundMoney((taxableMerchandise + processingFee) * 0.08)
-          const applePayTotal = roundMoney(
-            preview.subtotal - preview.discount + preview.shipping + processingFee + tax,
-          )
+          // The sheet has to open inside this click, so it starts with the
+          // shared-pricing preview and switches to the server total as soon
+          // as create-checkout-order returns it (see onpaymentmethodselected).
+          const preview = calculateCart(cart, isFoundingMember(), appliedDiscount, 'Apple Pay')
+          const applePayTotal = preview.total
+          let sheetTotal = applePayTotal
+          const sheetTotalLine = (amount: number) => ({
+            label: 'Science By Hugs',
+            amount: Math.max(amount, 0).toFixed(2),
+            type: 'final',
+          })
 
-          document.querySelector<HTMLElement>('#cartProcessingFee')!.textContent = money(processingFee)
-          document.querySelector<HTMLElement>('#cartTax')!.textContent = money(tax)
+          document.querySelector<HTMLElement>('#cartProcessingFee')!.textContent = money(preview.processingFee)
+          document.querySelector<HTMLElement>('#cartTax')!.textContent = money(preview.tax)
           document.querySelector<HTMLElement>('#cartTotal')!.textContent = money(applePayTotal)
 
           const nativeSession = new ApplePaySessionCtor(4, {
@@ -1910,11 +1914,7 @@ async function setupCartPayNow() {
             supportedNetworks: applePayConfig.supportedNetworks,
             requiredBillingContactFields: ['name', 'postalAddress'],
             requiredShippingContactFields: [],
-            total: {
-              label: 'Science By Hugs',
-              amount: Math.max(applePayTotal, 0).toFixed(2),
-              type: 'final',
-            },
+            total: sheetTotalLine(applePayTotal),
           })
 
           const preparedOrder = (async () => {
@@ -1939,9 +1939,29 @@ async function setupCartPayNow() {
             }
           }
 
+          nativeSession.onpaymentmethodselected = async () => {
+            try {
+              const { checkout } = await preparedOrder
+              sheetTotal = checkout.totals.total
+              nativeSession.completePaymentMethodSelection({ newTotal: sheetTotalLine(sheetTotal) })
+            } catch (error) {
+              cartPayMessage.textContent =
+                error instanceof Error ? error.message : 'Apple Pay checkout could not be prepared.'
+              nativeSession.abort()
+            }
+          }
+
           nativeSession.onpaymentauthorized = async (event: any) => {
             try {
               const { checkout, paypalOrder } = await preparedOrder
+
+              // Never charge an amount other than the one the customer approved.
+              if (Math.abs(checkout.totals.total - sheetTotal) > 0.001) {
+                nativeSession.completePayment({ status: ApplePaySessionCtor.STATUS_FAILURE })
+                cartPayMessage.textContent =
+                  `The order total is ${money(checkout.totals.total)}. Review it and try Apple Pay again.`
+                return
+              }
 
               await paypalApplePaySession.confirmOrder({
                 orderId: paypalOrder.orderId,

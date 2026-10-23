@@ -90,20 +90,31 @@ export async function handleSubscription(req: Request, admin: any, sql: any, pre
       try { return atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)).length } catch { return 0 }
     }
     if (keySize(keys?.p256dh) !== 65 || keySize(keys?.auth) !== 16) return respond({ error: 'Invalid subscription keys' }, 400)
-    await sql.begin(async (tx: any) => {
+    // An endpoint registered to another account moves to this one only when the
+    // request carries that subscription's keys. The auth secret is known only to
+    // the browser and this server, so a matching key pair means the same device;
+    // knowing the endpoint URL alone is not enough to take it over.
+    const bound = await sql.begin(async (tx: any) => {
       await tx`select pg_advisory_xact_lock(hashtext(${endpoint}))`
       if (fixedApp) {
+        const others = await tx`select p256dh,auth from public.push_subscriptions where endpoint=${endpoint} and user_id<>${user.id}`
+        if (others.some((row: any) => row.p256dh !== keys.p256dh || row.auth !== keys.auth)) return false
         await tx`delete from public.push_subscriptions where endpoint=${endpoint} and user_id<>${user.id}`
         await tx`insert into public.push_subscriptions(user_id,endpoint,p256dh,auth,updated_at)
           values(${user.id},${endpoint},${keys.p256dh},${keys.auth},now())
           on conflict(user_id,endpoint) do update set p256dh=excluded.p256dh,auth=excluded.auth,updated_at=now()`
         await tx`insert into public.notification_preferences(user_id) values(${user.id}) on conflict(user_id) do nothing`
-      } else {
-        await tx`insert into public.app_push_subscriptions(user_id,app,endpoint,p256dh,auth,updated_at)
-          values(${user.id},${app},${endpoint},${keys.p256dh},${keys.auth},now())
-          on conflict(app,endpoint) do update set user_id=excluded.user_id,p256dh=excluded.p256dh,auth=excluded.auth,updated_at=now()`
+        return true
       }
+      const rows = await tx`insert into public.app_push_subscriptions(user_id,app,endpoint,p256dh,auth,updated_at)
+        values(${user.id},${app},${endpoint},${keys.p256dh},${keys.auth},now())
+        on conflict(app,endpoint) do update set user_id=excluded.user_id,p256dh=excluded.p256dh,auth=excluded.auth,updated_at=now()
+        where app_push_subscriptions.user_id=excluded.user_id
+          or (app_push_subscriptions.p256dh=excluded.p256dh and app_push_subscriptions.auth=excluded.auth)
+        returning id`
+      return rows.length > 0
     })
+    if (!bound) return respond({ error: 'This device is registered for notifications on another account. Turn notifications off there, then try again.' }, 409)
     return respond({ success: true })
   }
   if (!existing) return respond({ error: 'Enable notifications on this device first.' }, 400)

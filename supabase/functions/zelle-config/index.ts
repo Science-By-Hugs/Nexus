@@ -13,7 +13,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -54,4 +54,14 @@ Deno.serve(async (req: Request) => {
     contact,
     qrUrl: qrUrl || null,
   });
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser sees this error.
+    console.error("zelle-config failed", error instanceof Error ? error.message : error);
+    return json({ error: "Zelle details are unavailable. Please try again." }, 500);
+  }
 });
