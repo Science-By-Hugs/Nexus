@@ -4,7 +4,8 @@ Status: Day 1 foundation verified. The separately connected NEXUS 2.0 Supabase p
 
 ## Branches and local previews
 
-- Integration branch: `codex/v2-development`, starting from the recorded production commit.
+- Integration branch: `staging` (renamed from `codex/v2-development` on Oct 25, 2026), starting from the recorded production commit.
+- 2.0 is the native nexus. app. The live 1.0 web storefront (`181284c`, Oct 5, #31) stays in `sciencebyhugs-nexus` and keeps taking orders until the app replaces it.
 - Day 1 feature branch: `codex/v2-staging-foundation`, reviewed into the integration branch only.
 - Do not merge these staging-only changes into production `main`.
 - NEXUS local preview: `http://localhost:5173`.
