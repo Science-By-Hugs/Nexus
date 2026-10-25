@@ -51,6 +51,9 @@ import { capturePayPalOrder, createPayPalOrder, getPayPalSdk } from './services/
 import { getZelleConfig, submitZellePayment } from './services/zelle'
 import { getInvoicePdfLink } from './services/invoicePdf'
 import { nexusPolicies } from './policies'
+import { getResearchAccess, submitResearchApplication, withdrawResearchApplication, type ResearchAccess } from './services/researchAccess'
+import { isPersonalEmail, statusCopy } from './researchApplication'
+import './research.css'
 import {
   buildReferralLink,
   claimReferral,
@@ -88,6 +91,9 @@ let appleAuthBusy = false
 let appleProfileSetup = false
 let query = ''
 let currentProfile: NexusProfile | null = null
+// null: signed out or not loaded yet. Products are only returned once approved.
+let researchAccess: ResearchAccess | null = null
+const researchApproved = () => researchAccess?.status === 'approved'
 let accountHistory: NexusOrderHistory[] = []
 let homeHistoryState: 'loading' | 'ready' | 'error' = 'ready'
 let cart: CartItem[] = loadCart()
@@ -297,6 +303,9 @@ app.innerHTML = `
       <button class="menu-card" type="button" data-menu-target="account">
         <span>ACCOUNT</span><strong>My Account</strong><small>Orders, invoices, profile, and security.</small>
       </button>
+      <button class="menu-card" type="button" data-menu-target="research">
+        <span>ACCESS</span><strong>Research Access</strong><small>Apply or check your verification.</small>
+      </button>
       <button class="menu-card" type="button" data-menu-target="referral">
         <span>REFERRALS</span><strong>Refer a Friend</strong><small>Referral rewards and progress.</small>
       </button>
@@ -383,6 +392,15 @@ app.innerHTML = `
       <button id="closeReferralDialog" class="referral-close-button" aria-label="Close">×</button>
     </div>
     <div id="referralDialogContent" class="referral-dialog-content"></div>
+  </dialog>
+
+  <dialog id="researchDialog" class="referral-dialog research-dialog">
+    <div class="referral-dialog-header">
+      <button id="backResearchToMenu" class="subpage-back-button" type="button">← Menu</button>
+      <strong>Research access</strong>
+      <button id="closeResearchDialog" class="referral-close-button" aria-label="Close">×</button>
+    </div>
+    <div id="researchDialogContent" class="referral-dialog-content"></div>
   </dialog>
 
   <dialog id="productDialog" class="product-dialog">
@@ -853,6 +871,7 @@ const menuDialog = document.querySelector<HTMLDialogElement>('#menuDialog')!
 const supportDialog = document.querySelector<HTMLDialogElement>('#supportDialog')!
 const policyDialog = document.querySelector<HTMLDialogElement>('#policyDialog')!
 const referralDialog = document.querySelector<HTMLDialogElement>('#referralDialog')!
+const researchDialog = document.querySelector<HTMLDialogElement>('#researchDialog')!
 const referralDialogContent = document.querySelector<HTMLDivElement>('#referralDialogContent')!
 const menuButton = document.querySelector<HTMLButtonElement>('#menuButton')!
 const accountButton = document.querySelector<HTMLButtonElement>('#accountButton')!
@@ -1328,6 +1347,96 @@ async function openReferralDashboard() {
   })
 }
 
+function researchGateMarkup() {
+  const status = researchAccess?.status ?? 'none'
+  const copy = statusCopy[status]
+  const action = !currentProfile
+    ? '<button type="button" class="auth-secondary" data-research-action="signin">Sign in with your institutional email</button>'
+    : `<button type="button" class="auth-secondary" data-research-action="open">${status === 'pending' ? 'View application' : 'Apply for research access'}</button>`
+  return `<div class="state catalog-empty research-gate"><span class="empty-symbol" aria-hidden="true">${icon('search')}</span><strong>${escapeHtml(copy.title)}</strong><p>${escapeHtml(copy.body)}</p>${action}</div>`
+}
+
+let researchRequest = 0
+async function refreshResearchAccess() {
+  const request = ++researchRequest
+  try {
+    const next = await getResearchAccess()
+    if (request !== researchRequest) return
+    researchAccess = next
+  } catch (error) {
+    if (request !== researchRequest) return
+    console.error('Research access check failed', error)
+    researchAccess = { status: 'none', expiresAt: null, note: null, institution: null }
+  }
+  await loadCatalog()
+  renderHome()
+  if (researchDialog.open) void openResearchDialog()
+}
+
+const researchDate = (value: string | null) =>
+  value ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(value)) : ''
+
+async function openResearchDialog() {
+  const content = document.querySelector<HTMLElement>('#researchDialogContent')!
+  if (!researchDialog.open) openDialog(researchDialog)
+  if (!currentProfile) {
+    content.innerHTML = `<section class="research-status"><h2>${escapeHtml(statusCopy.none.title)}</h2><p>${escapeHtml(statusCopy.none.body)}</p><button type="button" class="auth-primary" data-research-action="signin">Sign in</button></section>`
+    return
+  }
+  const { data: { user } } = await supabase.auth.getUser()
+  const status = researchAccess?.status ?? 'none'
+  const copy = statusCopy[status]
+  const extra = status === 'approved' && researchAccess?.expiresAt ? `<p>Approved until ${escapeHtml(researchDate(researchAccess.expiresAt))}.</p>`
+    : status === 'denied' && researchAccess?.note ? `<p class="research-note"><strong>Note from Science By Hugs:</strong> ${escapeHtml(researchAccess.note)}</p>` : ''
+  const statusCard = `<section class="research-status research-status-${status}"><h2>${escapeHtml(copy.title)}</h2><p>${escapeHtml(copy.body)}</p>${extra}${status === 'pending' ? '<button type="button" class="auth-secondary" id="withdrawResearch">Withdraw application</button>' : ''}</section>`
+  if (status === 'pending' || status === 'approved') {
+    content.innerHTML = statusCard
+    content.querySelector('#withdrawResearch')?.addEventListener('click', async () => {
+      try { await withdrawResearchApplication(); showToast('Application withdrawn.') } catch (error) { showToast(error instanceof Error ? error.message : 'Could not withdraw.') }
+      await refreshResearchAccess()
+    })
+    return
+  }
+  const email = user?.email || ''
+  const personal = isPersonalEmail(email)
+  content.innerHTML = `${status === 'none' ? '' : statusCard}
+    <form id="researchForm" class="research-form" novalidate>
+      <p class="research-intro">Applying as <strong>${escapeHtml(email)}</strong>. Applications must use your institutional email address. We review each one by hand.</p>
+      ${personal ? '<p class="research-warning">This is a personal email address. Sign out and create an account with your institutional email to apply.</p>' : ''}
+      <label>Institution<input name="institution_name" maxlength="200" autocomplete="organization" required /></label>
+      <label>Department <span>(optional)</span><input name="department" maxlength="200" /></label>
+      <label>Your role<input name="role_title" maxlength="120" placeholder="e.g. Research associate" required /></label>
+      <label>Principal investigator<input name="principal_investigator" maxlength="160" required /></label>
+      <label>Research summary<textarea name="research_summary" rows="5" maxlength="4000" placeholder="What the materials are for, in your lab’s words (40 characters or more)." required></textarea></label>
+      <label>Supporting document <span>(optional · PDF, JPG or PNG, up to 10 MB)</span><input name="document" type="file" accept="application/pdf,image/jpeg,image/png" /></label>
+      <label class="research-terms"><input name="terms" type="checkbox" /> <span>I confirm all purchases are for laboratory research use only, not for human or veterinary use, and that the information above is accurate.</span></label>
+      <p id="researchFormMessage" class="research-message" role="status" aria-live="polite"></p>
+      <button type="submit" class="auth-primary" ${personal ? 'disabled' : ''}>Submit application</button>
+    </form>`
+  const form = content.querySelector<HTMLFormElement>('#researchForm')!
+  form.addEventListener('submit', async event => {
+    event.preventDefault()
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    const message = form.querySelector<HTMLElement>('#researchFormMessage')!
+    const field = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement).value
+    const file = (form.elements.namedItem('document') as HTMLInputElement).files?.[0] ?? null
+    button.disabled = true
+    message.textContent = 'Submitting…'
+    try {
+      await submitResearchApplication({
+        institution_name: field('institution_name'), department: field('department'), role_title: field('role_title'),
+        principal_investigator: field('principal_investigator'), research_summary: field('research_summary'),
+        terms: (form.elements.namedItem('terms') as HTMLInputElement).checked,
+      }, file)
+      showToast('Application submitted.')
+      await refreshResearchAccess()
+    } catch (error) {
+      message.textContent = error instanceof Error ? error.message : 'Could not submit. Try again.'
+      button.disabled = false
+    }
+  })
+}
+
 function openSupportDialog() {
   if (menuDialog.open) menuDialog.close()
   openDialog(supportDialog)
@@ -1408,8 +1517,8 @@ function renderHome() {
   document.querySelector<HTMLElement>('#latestOrderNumber')!.textContent = latest?.order_number || (currentProfile ? 'Explore the research catalog.' : 'Keep your research in one place.')
   const preview = document.querySelector<HTMLElement>('#homeProductPreview')!
   const product = visibleProducts(false)[0]
-  preview.innerHTML = product ? `<button class="home-product-card" type="button" data-preview-product="${escapeHtml(product.id)}"><span class="home-product-image">${product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}" />` : missingProductImage}</span><span class="home-product-copy"><small>From the catalog</small><strong>${escapeHtml(product.name)}</strong><span class="home-product-price">${money(Number(product.price))}</span><span class="availability ${(product.available_to_sell ?? 0) > 0 ? '' : 'unavailable'}">${product.available_to_sell == null ? 'Stock unconfirmed' : product.available_to_sell > 0 ? 'In stock' : 'Out of stock'}</span><span class="home-product-link">View product ${icon('chevron')}</span></span></button>` : '<div class="state catalog-empty"><span class="empty-symbol" aria-hidden="true">' + icon('search') + '</span><strong>The catalog is being prepared.</strong><p>Products will appear here after their information, imagery and availability have been reviewed.</p></div>'
-  preview.querySelector('button')?.addEventListener('click', () => openProduct(product!.id))
+  preview.innerHTML = product ? `<button class="home-product-card" type="button" data-preview-product="${escapeHtml(product.id)}"><span class="home-product-image">${product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}" />` : missingProductImage}</span><span class="home-product-copy"><small>From the catalog</small><strong>${escapeHtml(product.name)}</strong><span class="home-product-price">${money(Number(product.price))}</span><span class="availability ${(product.available_to_sell ?? 0) > 0 ? '' : 'unavailable'}">${product.available_to_sell == null ? 'Stock unconfirmed' : product.available_to_sell > 0 ? 'In stock' : 'Out of stock'}</span><span class="home-product-link">View product ${icon('chevron')}</span></span></button>` : !researchApproved() ? researchGateMarkup() : '<div class="state catalog-empty"><span class="empty-symbol" aria-hidden="true">' + icon('search') + '</span><strong>The catalog is being prepared.</strong><p>Products will appear here after their information, imagery and availability have been reviewed.</p></div>'
+  if (product) preview.querySelector('button')?.addEventListener('click', () => openProduct(product.id))
 }
 
 function renderProducts() {
@@ -1418,7 +1527,7 @@ function renderProducts() {
   count.textContent = `${list.length} item${list.length === 1 ? '' : 's'}`
 
   if (!list.length) {
-    grid.innerHTML = products.length ? '<div class="state"><strong>No matching products.</strong><p>Try another name or choose a different category.</p></div>' : '<div class="state catalog-empty"><strong>No products are available yet.</strong><p>The catalog will appear here once products are ready for browsing.</p></div>'
+    grid.innerHTML = !researchApproved() ? researchGateMarkup() : products.length ? '<div class="state"><strong>No matching products.</strong><p>Try another name or choose a different category.</p></div>' : '<div class="state catalog-empty"><strong>No products are available yet.</strong><p>The catalog will appear here once products are ready for browsing.</p></div>'
     return
   }
 
@@ -2630,6 +2739,8 @@ async function refreshAccount() {
     document.querySelector<HTMLElement>('#appleProfileSetup')!.hidden = true
     resetMarketingPreferences()
     currentProfile = null
+    researchAccess = null
+    void loadCatalog()
     renderHome()
     accountButton.textContent = 'Account'
     signedOutView.hidden = false
@@ -2677,6 +2788,7 @@ async function refreshAccount() {
   document.querySelector<HTMLElement>('#accountMembership')!.textContent = currentProfile?.memberships?.name || 'Member'
   document.querySelector<HTMLElement>('#accountStatus')!.textContent = currentProfile?.account_status || 'Active'
   renderAccountBenefits()
+  void refreshResearchAccess()
   renderHome()
   if (currentProfile && currentAccountIsActive()) void maybeClaimStoredReferral()
   void refreshOrderHistory()
@@ -2747,6 +2859,18 @@ document.querySelector<HTMLButtonElement>('#backPolicyToMenu')!.addEventListener
 
 document.querySelector<HTMLButtonElement>('#closeReferralDialog')!.addEventListener('click', () => referralDialog.close())
 document.querySelector<HTMLButtonElement>('#backReferralToMenu')!.addEventListener('click', () => returnToMenu(referralDialog))
+researchDialog.addEventListener('click', event => {
+  if (event.target === researchDialog) researchDialog.close()
+})
+document.querySelector<HTMLButtonElement>('#closeResearchDialog')!.addEventListener('click', () => researchDialog.close())
+document.querySelector<HTMLButtonElement>('#backResearchToMenu')!.addEventListener('click', () => returnToMenu(researchDialog))
+// Gate buttons are re-rendered with the catalog, so listen once at the document.
+document.addEventListener('click', event => {
+  const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-research-action]')
+  if (!target) return
+  if (target.dataset.researchAction === 'signin') openAccountDialog()
+  else openResearchDialog()
+})
 document.querySelector<HTMLButtonElement>('#successCloseButton')!.addEventListener('click', () => cartDialog.close())
 document.querySelector<HTMLButtonElement>('#payNowSuccessCloseButton')!.addEventListener('click', () => cartDialog.close())
 
@@ -2769,6 +2893,12 @@ menuDialog.querySelectorAll<HTMLButtonElement>('[data-menu-target]').forEach(but
     if (target === 'account') {
       menuDialog.close()
       openAccountDialog()
+      return
+    }
+
+    if (target === 'research') {
+      menuDialog.close()
+      void openResearchDialog()
       return
     }
 
