@@ -42,7 +42,12 @@ jobs:
         with:
           node-version: 22
       # No lockfile yet: it is generated on the first machine with npm access and committed then.
-      - run: npm install --no-audit --no-fund
+      - name: Install dependencies
+        run: |
+          npm install --no-audit --no-fund > npm-install.log 2>&1 || {
+            grep -iE 'npm (error|ERR)' npm-install.log | head -15 | sed 's/^/::error title=npm install::/'
+            exit 1
+          }
       - run: npm run typecheck
       - run: npm test
       - name: Bundle check (no deploy)
