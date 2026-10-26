@@ -1,0 +1,49 @@
+name: New NEXUS CI
+on:
+  push:
+    branches: [new-nexus]
+    paths: ['new-nexus/**', '.github/workflows/new-nexus-ci.yml']
+  pull_request:
+    branches: [new-nexus]
+permissions:
+  contents: read
+concurrency:
+  group: new-nexus-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    name: Schema + store logic (Postgres 17)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations twice and run SQL tests
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: ./new-nexus/db/run-tests.sh
+
+  api:
+    name: Worker API typecheck + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-nexus/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No lockfile yet: it is generated on the first machine with npm access and committed then.
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - name: Bundle check (no deploy)
+        run: npx wrangler deploy --dry-run --env staging --outdir dist

@@ -1,0 +1,26 @@
+# New NEXUS API (Cloudflare Workers, free plan).
+# Secrets are never stored here. Set them per environment:
+#   npx wrangler secret put DATABASE_URL --env staging
+# DATABASE_URL = the Neon *pooled* connection string for that environment.
+
+name = "new-nexus-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[env.staging]
+name = "new-nexus-api-staging"
+workers_dev = true
+
+[env.staging.vars]
+APP_ENV = "staging"
+ALLOWED_ORIGINS = "http://localhost:8081,http://localhost:5173"
+AUTH_JWKS_URL = "REPLACE_WITH_NEON_AUTH_JWKS_URL"
+AUTH_ISSUER = "REPLACE_WITH_NEON_AUTH_ISSUER"
+
+# Production stays unconfigured until launch approval.
+[env.production.vars]
+APP_ENV = "production"
+ALLOWED_ORIGINS = ""
+AUTH_JWKS_URL = "REPLACE_AT_LAUNCH"
+AUTH_ISSUER = "REPLACE_AT_LAUNCH"
