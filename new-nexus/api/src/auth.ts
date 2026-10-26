@@ -20,7 +20,14 @@ interface Jwk extends JsonWebKey {
 
 type KeyLoader = (kid: string, alg: string) => Promise<CryptoKey>;
 
-const ALGS: Record<string, { import: RsaHashedImportParams | EcKeyImportParams; verify: AlgorithmIdentifier | EcdsaParams }> = {
+// Plain object shapes: the DOM names for these (RsaHashedImportParams etc.)
+// do not exist in the Workers type set.
+interface AlgSpec {
+  import: { name: string; hash?: string; namedCurve?: string };
+  verify: { name: string; hash?: string };
+}
+
+const ALGS: Record<string, AlgSpec> = {
   RS256: {
     import: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     verify: { name: 'RSASSA-PKCS1-v1_5' },
