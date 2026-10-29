@@ -29,6 +29,7 @@ export type NexusPaymentSummary = {
 }
 
 export type NexusOrderHistory = {
+  sandbox?: boolean
   id: string
   order_number: string | null
   status: string
@@ -53,7 +54,7 @@ export type NexusOrderHistory = {
 export async function getMyOrderHistory(customerId: string): Promise<NexusOrderHistory[]> {
   const { data: orders, error: ordersError } = await supabase
     .from('orders')
-    .select('id,order_number,status,subtotal,discount_total,shipping_discount_total,discount_code,shipping_total,tax_total,processing_fee_total,total,payment_status,payment_method,paid_at,estimated_delivery_date,created_at')
+    .select('id,order_number,sandbox,status,subtotal,discount_total,shipping_discount_total,discount_code,shipping_total,tax_total,processing_fee_total,total,payment_status,payment_method,paid_at,estimated_delivery_date,created_at')
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
 

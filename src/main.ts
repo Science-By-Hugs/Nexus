@@ -13,15 +13,9 @@ import { ENABLE_TEST_PAYMENTS } from './config'
 import { marketingPanel, bindMarketing, resetMarketingPreferences } from './marketing'
 import { avatarMarkup, avatarPanel, bindAvatars } from './avatar'
 import { pushPanel, pushPrompt, bindPushPanel, disablePush } from './push'
-import './styles.css'
-import './brand.css'
-import './minimal.css'
-import './orbit.css'
-import './fluid.css'
-import './refinement.css'
-import './compact.css'
-import './authRedesign.css'
 import './slate.css'
+import './ios.css'
+import { showLaunchLoader } from './launchLoader'
 import { registerSW } from 'virtual:pwa-register'
 import { fetchCatalog, type CatalogProduct } from './services/catalog'
 import {
@@ -48,11 +42,12 @@ import {
   clearCart,
   loadCart,
   saveCart,
+  reconcileCart,
   type CartItem,
 } from './services/cart'
 import { validateDiscountCode, type DiscountValidation } from './services/discountCodes'
 import { requestInvoice } from './services/invoiceRequests'
-import { createCheckoutOrder, type CheckoutOrderResult } from './services/checkout'
+import { createCheckoutOrder, submitSandboxOrder, cancelSandboxOrder, type CheckoutOrderResult } from './services/checkout'
 import { getMyOrderHistory, type NexusOrderHistory } from './services/accountHistory'
 import { capturePayPalOrder, createPayPalOrder, getPayPalSdk } from './services/paypal'
 import { getZelleConfig, submitZellePayment } from './services/zelle'
@@ -88,6 +83,7 @@ document.body.prepend(stagingLabel)
 
 const app = document.querySelector<HTMLDivElement>('#app')
 if (!app) throw new Error('App root not found')
+showLaunchLoader()
 
 let products: CatalogProduct[] = []
 let selectedCategory = 'All'
@@ -98,6 +94,8 @@ let currentProfile: NexusProfile | null = null
 let accountHistory: NexusOrderHistory[] = []
 let homeHistoryState: 'loading' | 'ready' | 'error' = 'ready'
 let cart: CartItem[] = loadCart()
+let sandboxBusy = false
+let catalogRequest = 0
 let activeCheckoutOrder: CheckoutOrderResult | null = null
 let activeCheckoutPaymentMethod: 'PayPal' | 'Venmo' | 'Apple Pay' | 'Zelle' | null = null
 let appliedDiscount: DiscountValidation | null = null
@@ -112,7 +110,7 @@ if (incomingReferralCode) {
   window.localStorage.setItem('sbh_referral_code', incomingReferralCode.trim())
 }
 
-const defaultProductImageUrl = `${import.meta.env.BASE_URL}science-by-hugs-vial-v3.png`
+const missingProductImage = '<span class="product-image-empty"><span aria-hidden="true">—</span><small>Product photography pending</small></span>'
 
 const escapeHtml = (value: unknown) =>
   String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -168,10 +166,10 @@ const policyCardsMarkup = nexusPolicies.map(policy => `
 
 
 app.innerHTML = `
-  <section id="entryGate" class="entry-gate" aria-labelledby="entryGateTitle" style="--entry-vial:url('${defaultProductImageUrl}')" ${hasValidEntryAcknowledgment() ? 'hidden' : ''}>
+  <section id="entryGate" class="entry-gate" aria-labelledby="entryGateTitle" ${hasValidEntryAcknowledgment() ? 'hidden' : ''}>
     <div class="entry-gate-backdrop" aria-hidden="true"></div>
     <div class="entry-gate-card">
-      <span class="entry-gate-logo minimal-wordmark" aria-label="Nexus">NEXUS<b class="wordmark-dot">.</b></span>
+      <img class="entry-brand-symbol" src="${import.meta.env.BASE_URL}brand/nexus-app-icon.svg" alt="NEXUS" width="56" height="56" />
       <div class="entry-gate-atom" aria-hidden="true">⚛</div>
       <span class="entry-gate-kicker">RESEARCH ACCESS CONFIRMATION</span>
       <h1 id="entryGateTitle">Before entering <em>Nexus.</em></h1>
@@ -239,7 +237,8 @@ app.innerHTML = `
   ${pushPrompt()}
   <main class="shell">
     <section id="homeScreen" class="home-screen" aria-labelledby="homeGreeting">
-      <div class="home-intro"><h1 id="homeGreeting">Welcome to Nexus.</h1><p>Your research, connected.</p></div>
+      <div class="home-intro"><h1 id="homeGreeting">Welcome to Nexus.</h1><p>Clear information. Considered choices.</p></div>
+      <button id="homeSearchButton" class="home-search" type="button">${icon('search')}<span>Search catalog</span></button>
       <button id="homeSignInButton" class="home-signin auth-secondary" type="button">Sign in to your account ${icon('chevron')}</button>
       <button id="latestOrderButton" class="latest-order" type="button"><span class="latest-order-copy"><small>Latest order</small><strong id="latestOrderStatus">Sign in to see your orders</strong><span id="latestOrderNumber">Keep your research in one place.</span></span><span class="text-action">View orders ${icon('chevron')}</span></button>
 
@@ -265,9 +264,9 @@ app.innerHTML = `
       <div class="section-heading">
         <div>
           <span class="eyebrow">EXPLORE</span>
-          <h2>Research Catalog</h2>
+          <h2>Products</h2>
         </div>
-        <span id="productCount" class="count"></span>
+        <span id="productCount" class="count" role="status" aria-live="polite"></span>
       </div>
 
       <div id="catalogGrid" class="grid">
@@ -401,7 +400,7 @@ app.innerHTML = `
     <div class="cart-heading">
       <span class="eyebrow">NEXUS CHECKOUT</span>
       <h2>Your research cart.</h2>
-      <p>${ENABLE_TEST_PAYMENTS ? 'Review your items and choose how to check out.' : 'Review your items. Checkout and invoice requests are unavailable in this early build.'}</p>
+      <p>${ENABLE_TEST_PAYMENTS ? 'Review your items and choose how to check out.' : 'Review verified items and place a sandbox reservation. No payment or dispatch occurs.'}</p>
     </div>
 
     <div id="cartEmpty" class="cart-empty">
@@ -416,10 +415,10 @@ app.innerHTML = `
       <section class="checkout-panel">
         <div class="checkout-title">Order Summary</div>
         <div class="summary-row"><span>Subtotal</span><strong id="cartSubtotal">$0.00</strong></div>
-        <div class="summary-row"><span id="cartDiscountLabel">Discounts</span><strong id="cartDiscount">-$0.00</strong></div>
-        <div class="summary-row"><span>Shipping</span><strong id="cartShipping">$0.00</strong></div>
-        <div class="summary-row"><span>Sales Tax (8%)</span><strong id="cartTax">$0.00</strong></div>
-        <div class="summary-row"><span>Processing fee (5%)</span><strong id="cartProcessingFee">$0.00</strong></div>
+        <div class="summary-row" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}><span id="cartDiscountLabel">Discounts</span><strong id="cartDiscount">-$0.00</strong></div>
+        <div class="summary-row" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}><span>Shipping</span><strong id="cartShipping">$0.00</strong></div>
+        <div class="summary-row" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}><span>Sales Tax (8%)</span><strong id="cartTax">$0.00</strong></div>
+        <div class="summary-row" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}><span>Processing fee (5%)</span><strong id="cartProcessingFee">$0.00</strong></div>
         <div class="summary-row total-row"><span>Total</span><strong id="cartTotal">$0.00</strong></div>
         <div class="server-note">Final pricing is revalidated securely when the request is submitted.</div>
       </section>
@@ -437,7 +436,7 @@ app.innerHTML = `
           <div class="customer-detail" id="checkoutCustomerEmail">—</div>
           <div class="customer-detail" id="checkoutCustomerPhone">—</div>
 
-          <label class="checkout-field">
+          <label class="checkout-field" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}>
             Preferred Contact
             <select id="contactMethod">
               <option value="">Choose one</option>
@@ -447,14 +446,14 @@ app.innerHTML = `
             </select>
           </label>
 
-          <label class="checkout-field">
+          <label class="checkout-field" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}>
             Notes for this order
             <textarea id="customerNotes" rows="3" maxlength="500" placeholder="Optional"></textarea>
           </label>
         </div>
       </section>
 
-      <section class="checkout-panel discount-code-panel">
+      <section class="checkout-panel discount-code-panel" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}>
         <div class="discount-code-heading">
           <div>
             <span class="eyebrow">PROMOTIONS</span>
@@ -480,7 +479,7 @@ app.innerHTML = `
         <div id="discountCodeMessage" class="discount-code-message" aria-live="polite"></div>
       </section>
 
-      <section class="policy-panel">
+      <section class="policy-panel" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}>
         <label class="policy-check">
           <input id="policyAcknowledgment" type="checkbox" />
           <span>
@@ -489,7 +488,16 @@ app.innerHTML = `
         </label>
       </section>
 
-      <section class="checkout-choice">
+      <section class="checkout-panel sandbox-checkout">
+        <h3>Sandbox reservation</h3>
+        <p>No payment, tax, shipping charge or dispatch. This reserves verified stock for testing only; cancel from order history to release it.</p>
+        <label class="checkout-field">Local fulfillment area
+          <select id="sandboxCity"><option>Las Vegas</option><option>North Las Vegas</option><option>Henderson</option></select>
+        </label>
+        <button id="sandboxOrderButton" class="request-invoice-button" type="button">Reserve sandbox order</button>
+        <p id="sandboxOrderMessage" role="status" aria-live="polite"></p>
+      </section>
+      <section class="checkout-choice" ${ENABLE_TEST_PAYMENTS ? '' : 'hidden'}>
         <button id="payNowButton" class="request-invoice-button" type="button">
           Pay Now
         </button>
@@ -1404,7 +1412,7 @@ function renderHome() {
   document.querySelector<HTMLElement>('#latestOrderNumber')!.textContent = latest?.order_number || (currentProfile ? 'Explore the research catalog.' : 'Keep your research in one place.')
   const preview = document.querySelector<HTMLElement>('#homeProductPreview')!
   const product = visibleProducts(false)[0]
-  preview.innerHTML = product ? `<button class="home-product-card" type="button" data-preview-product="${escapeHtml(product.id)}"><img src="${escapeHtml(product.image_url || defaultProductImageUrl)}" alt="Science By Hugs research vial"><span><strong>${escapeHtml(product.name)}</strong><span class="home-product-price">${money(Number(product.price))}</span><span class="availability ${(product.storefront_status || '').toLowerCase() === 'available' ? '' : 'unavailable'}">${escapeHtml(product.storefront_status || 'Unavailable')}</span></span></button>` : '<p class="state">No catalog items available.</p>'
+  preview.innerHTML = product ? `<button class="home-product-card" type="button" data-preview-product="${escapeHtml(product.id)}"><span class="home-product-image">${product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.name)}" />` : missingProductImage}</span><span class="home-product-copy"><small>From the catalog</small><strong>${escapeHtml(product.name)}</strong><span class="home-product-price">${money(Number(product.price))}</span><span class="availability ${(product.available_to_sell ?? 0) > 0 ? '' : 'unavailable'}">${product.available_to_sell == null ? 'Stock unconfirmed' : product.available_to_sell > 0 ? 'In stock' : 'Out of stock'}</span><span class="home-product-link">View product ${icon('chevron')}</span></span></button>` : '<div class="state catalog-empty"><span class="empty-symbol" aria-hidden="true">' + icon('search') + '</span><strong>The catalog is being prepared.</strong><p>Products will appear here after their information, imagery and availability have been reviewed.</p></div>'
   preview.querySelector('button')?.addEventListener('click', () => openProduct(product!.id))
 }
 
@@ -1414,29 +1422,29 @@ function renderProducts() {
   count.textContent = `${list.length} item${list.length === 1 ? '' : 's'}`
 
   if (!list.length) {
-    grid.innerHTML = '<div class="state"><p>No products match this search.</p></div>'
+    grid.innerHTML = products.length ? '<div class="state"><strong>No matching products.</strong><p>Try another name or choose a different category.</p></div>' : '<div class="state catalog-empty"><strong>No products are available yet.</strong><p>The catalog will appear here once products are ready for browsing.</p></div>'
     return
   }
 
   grid.innerHTML = list.map(product => {
     const category = product.product_categories?.name || 'Research'
-    const available = (product.storefront_status || '').toLowerCase() === 'available'
+    const available = (product.available_to_sell ?? 0) > 0
 
     return `
       <article class="product-card" data-id="${product.id}">
         <div class="product-image">
           ${product.image_url
             ? `<img src="${escapeHtml(product.image_url)}" alt="" loading="lazy" />`
-            : `<img src="${defaultProductImageUrl}" alt="Science By Hugs research vial" loading="lazy" class="default-product-image" />`}
+            : missingProductImage}
           ${product.featured ? '<span class="featured">FEATURED</span>' : ''}
         </div>
         <div class="product-body">
           <span class="category">${escapeHtml(category)}</span>
-          <h3>${escapeHtml(product.name)}</h3>
-          <p class="type">${escapeHtml(product.product_type || 'Research Product')}</p>
+          <h3><button class="product-detail-link" type="button" data-view-id="${escapeHtml(product.id)}">${escapeHtml(product.name)}</button></h3>
+          <p class="type">${escapeHtml(product.quantity || product.product_type || '')}</p>
           <div class="product-footer">
             <strong>${money(Number(product.price))}</strong>
-            <span class="availability ${available ? '' : 'unavailable'}">${escapeHtml(product.storefront_status || 'Available')}</span>
+            <span class="availability ${available ? '' : 'unavailable'}">${product.available_to_sell == null ? 'Stock unconfirmed' : product.available_to_sell > 0 ? 'In stock' : 'Out of stock'}</span>
           </div>
           <button
             class="add-cart-button"
@@ -1462,7 +1470,9 @@ function renderProducts() {
     button.addEventListener('click', () => {
       const product = products.find(item => item.id === button.dataset.addId)
       if (!product) return
-      cart = addProduct(cart, product)
+      const next = addProduct(cart, product)
+      if (next === cart) { showToast('No more verified stock is available.'); return }
+      cart = next
       updateCartUI()
       showToast('Added to cart')
     })
@@ -1474,17 +1484,17 @@ function openProduct(id: string) {
   if (!product) return
 
   const category = product.product_categories?.name || 'Research'
-  const available = (product.storefront_status || '').toLowerCase() === 'available'
+  const available = (product.available_to_sell ?? 0) > 0
 
   dialogContent.innerHTML = `
     <div class="dialog-image">
       ${product.image_url
         ? `<img src="${escapeHtml(product.image_url)}" alt="" />`
-        : `<img src="${defaultProductImageUrl}" alt="Science By Hugs research vial" class="default-product-image" />`}
+        : missingProductImage}
     </div>
     <span class="category">${escapeHtml(category)}</span>
     <h2>${escapeHtml(product.name)}</h2>
-    <div class="dialog-price">${money(Number(product.price))}</div>
+    <div class="dialog-price">${money(Number(product.price))}</div><p class="type">${escapeHtml([product.sku, product.quantity].filter(Boolean).join(' · '))}</p>
     <p class="dialog-description">${escapeHtml(product.description || 'Product information is being prepared.')}</p>
     <div class="research-notice">For research use only. Not for human or veterinary use. Educational information is not medical advice.</div>
     <button id="dialogAddToCart" class="request-invoice-button" type="button" ${available ? '' : 'disabled'}>
@@ -1494,7 +1504,9 @@ function openProduct(id: string) {
 
   document.querySelector<HTMLButtonElement>('#dialogAddToCart')?.addEventListener('click', () => {
     if (!available) return
-    cart = addProduct(cart, product)
+    const next = addProduct(cart, product)
+    if (next === cart) { showToast('No more verified stock is available.'); return }
+    cart = next
     updateCartUI()
     showToast('Added to cart')
   })
@@ -1592,6 +1604,9 @@ function updateCartUI() {
 
   cartItems.querySelectorAll<HTMLButtonElement>('[data-qty-id]').forEach(button => {
     button.addEventListener('click', () => {
+      const existing = cart.find(item => item.id === button.dataset.qtyId)
+      const available = products.find(item => item.id === button.dataset.qtyId)?.available_to_sell ?? 0
+      if (Number(button.dataset.delta) > 0 && existing && existing.quantity >= Math.min(available, 100)) { showToast('No more verified stock is available.'); return }
       cart = changeQuantity(
         cart,
         button.dataset.qtyId || '',
@@ -1617,7 +1632,7 @@ function updateCartUI() {
   document.querySelector<HTMLElement>('#cartDiscount')!.textContent = '-' + money(totals.totalSavings)
   document.querySelector<HTMLElement>('#cartShipping')!.textContent = money(totals.shipping)
   document.querySelector<HTMLElement>('#cartTax')!.textContent = money(totals.tax)
-  document.querySelector<HTMLElement>('#cartTotal')!.textContent = money(totals.total)
+  document.querySelector<HTMLElement>('#cartTotal')!.textContent = money(ENABLE_TEST_PAYMENTS ? totals.total : totals.subtotal)
 
   updateCheckoutCustomer()
   updateRequestButton()
@@ -1658,6 +1673,10 @@ function currentAccountIsActive() {
 }
 
 function updateRequestButton() {
+  const sandboxButton = document.querySelector<HTMLButtonElement>('#sandboxOrderButton')!
+  sandboxButton.disabled = sandboxBusy || !currentProfile || !cart.length || String(currentProfile?.account_status || '').trim().toLowerCase() !== 'active'
+  sandboxButton.textContent = sandboxBusy ? 'Reserving…' : currentProfile ? 'Reserve sandbox order' : 'Sign in to reserve'
+
   if (!ENABLE_TEST_PAYMENTS) {
     payNowButton.disabled = true
     requestInvoiceButton.disabled = true
@@ -2156,7 +2175,7 @@ function renderAccountHistory() {
     `).join('')
 
     const paymentText =
-      paymentVerified
+      order.sandbox ? 'Sandbox only · no payment or dispatch' : paymentVerified
         ? `Paid${order.payment?.provider ? ` via ${order.payment.provider}` : ''}`
         : paymentSubmitted
           ? `Submitted${order.payment?.provider ? ` via ${order.payment.provider}` : ''} · awaiting verification`
@@ -2176,7 +2195,7 @@ function renderAccountHistory() {
           </span>
         </div>
 
-        ${!['delivered', 'cancelled'].includes(order.status) ? `
+        ${!order.sandbox && !['delivered', 'cancelled'].includes(order.status) ? `
           <div class="history-delivery">
             <span>Estimated delivery</span>
             <strong>${order.estimated_delivery_date ? escapeHtml(deliveryDate(order.estimated_delivery_date)) : 'To be confirmed'}</strong>
@@ -2229,6 +2248,7 @@ function renderAccountHistory() {
           </button>
         ` : ''}
 
+        ${order.sandbox && order.status === 'pending' ? `<button class="auth-secondary" type="button" data-cancel-sandbox="${escapeHtml(order.id)}">Cancel sandbox reservation</button>` : ''}
         <div class="history-payment ${paymentVerified ? 'paid' : paymentSubmitted ? 'submitted' : ''}">
           <div>
             <span>Payment status</span>
@@ -2239,7 +2259,7 @@ function renderAccountHistory() {
           ` : ''}
         </div>
 
-        ${(invoiceSent || directCheckout) && !paymentVerified && !paymentSubmitted ? `
+        ${!order.sandbox && (invoiceSent || directCheckout) && !paymentVerified && !paymentSubmitted ? `
           <div class="history-paypal-shell">
             <div>
               <span class="eyebrow">PAY SECURELY</span>
@@ -2290,6 +2310,17 @@ function renderAccountHistory() {
       </article>
     `
   }).join('')
+
+  accountHistoryList.querySelectorAll<HTMLButtonElement>('[data-cancel-sandbox]').forEach(button => {
+    button.addEventListener('click', async () => {
+      button.disabled = true
+      try {
+        await cancelSandboxOrder(button.dataset.cancelSandbox!)
+        await Promise.all([refreshOrderHistory(), loadCatalog()])
+        showToast('Sandbox reservation cancelled. Stock released.')
+      } catch (error) { showToast(error instanceof Error ? error.message : 'Cancellation failed.'); button.disabled = false }
+    })
+  })
 
   accountHistoryList.querySelectorAll<HTMLButtonElement>('[data-invoice-pdf-id]').forEach(button => {
     button.addEventListener('click', async () => {
@@ -2813,6 +2844,7 @@ mobileCatalogButton.addEventListener('click', () => showMainScreen('catalog'))
 mobileOrdersButton.addEventListener('click', openOrders)
 mobileAccountButton.addEventListener('click', () => { setMobileNavActive('account'); openAccountDialog() })
 for (const id of ['browseCatalogButton']) document.querySelector('#'+id)!.addEventListener('click', () => showMainScreen('catalog'))
+document.querySelector('#homeSearchButton')!.addEventListener('click', () => { showMainScreen('catalog'); searchInput.focus() })
 document.querySelector('#homeSignInButton')!.addEventListener('click', openAccountDialog)
 for (const id of ['latestOrderButton']) document.querySelector('#'+id)!.addEventListener('click', openOrders)
 document.querySelector('.brand')!.addEventListener('click', event => { event.preventDefault(); showMainScreen('home') })
@@ -3240,42 +3272,72 @@ onAuthChange((event) => {
   }
 })
 
-async function loadCatalog() {
+async function loadCatalog(): Promise<boolean> {
+  const request = ++catalogRequest
   try {
-    products = await fetchCatalog()
-
-    const liveProducts = new Map(products.map(product => [product.id, product]))
-    let cartChanged = false
-
-    cart = cart.map(item => {
-      const product = liveProducts.get(item.id)
-      if (!product) return item
-
-      const price = Number(product.price) || 0
-      const shippingFrom = product.shipping_from || ''
-
-      if (item.price === price && item.shippingFrom === shippingFrom) return item
-
-      cartChanged = true
-      return { ...item, price, shippingFrom }
-    })
-
-    if (cartChanged) saveCart(cart)
-
+    const next = await fetchCatalog()
+    if (request !== catalogRequest) return false
+    products = next
+    cart = reconcileCart(cart, products)
     renderChips()
     renderProducts()
     updateCartUI()
+    return true
   } catch (error) {
-    console.error(error)
-    document.querySelector<HTMLElement>('#homeProductPreview')!.innerHTML = '<p class="state">Catalog unavailable. Please try again later.</p>'
-    grid.innerHTML = `
-      <div class="state error">
-        <strong>Nexus could not reach the catalog.</strong>
-        <p>Please refresh and try again.</p>
-      </div>
-    `
+    if (request !== catalogRequest) return false
+    console.error('Catalog refresh failed', error)
+    products = []
+    document.querySelector<HTMLElement>('#homeProductPreview')!.innerHTML = '<p class="state">Catalog unavailable. Please try again.</p>'
+    grid.innerHTML = '<div class="state error"><strong>Nexus could not reach the catalog.</strong><button type="button" id="retryCatalog" class="auth-secondary">Try again</button></div>'
+    document.querySelector('#retryCatalog')?.addEventListener('click', () => void loadCatalog())
+    return false
   }
 }
+
+document.querySelector<HTMLButtonElement>('#sandboxOrderButton')!.addEventListener('click', async () => {
+  if (sandboxBusy || !currentProfile || !cart.length) return
+  sandboxBusy = true
+  updateRequestButton()
+  const message = document.querySelector<HTMLElement>('#sandboxOrderMessage')!
+  const profileId = currentProfile.id
+  const before = JSON.stringify(cart)
+  try {
+    message.textContent = 'Checking current prices and availability…'
+    if (!await loadCatalog()) throw new Error('Catalog unavailable. Please retry before reserving.')
+    if (currentProfile?.id !== profileId) throw new Error('Your account changed. Please review the cart.')
+    if (before !== JSON.stringify(cart)) throw new Error('Prices or availability changed. Review the updated cart and submit again.')
+    const city = document.querySelector<HTMLSelectElement>('#sandboxCity')!.value
+    const fingerprint = JSON.stringify({ profileId, city, cart })
+    const attemptKey = 'nexus-staging-sandbox-attempt'
+    let attempt: { fingerprint: string; key: string } | null = null
+    try { attempt = JSON.parse(sessionStorage.getItem(attemptKey) || 'null') } catch { /* start a new request */ }
+    if (attempt?.fingerprint !== fingerprint) attempt = { fingerprint, key: crypto.randomUUID() }
+    sessionStorage.setItem(attemptKey, JSON.stringify(attempt))
+    const order = await submitSandboxOrder(cart, { city, idempotencyKey: attempt!.key })
+    if (currentProfile?.id !== profileId) return
+    message.textContent = `${order.order_number} reserved · ${money(Number(order.total))} merchandise only. No payment or dispatch. Cancel from order history to release stock.`
+    cart = []
+    clearCart()
+    sessionStorage.removeItem(attemptKey)
+    showToast('Sandbox reservation created. No charge.')
+    await Promise.all([refreshOrderHistory(), loadCatalog()])
+    cartDialog.close()
+    showOrderActivity()
+    openDialog(accountDialog)
+  } catch (error) {
+    message.textContent = error instanceof Error ? error.message : 'Could not reserve. Retry safely or check order history.'
+  } finally { sandboxBusy = false; updateRequestButton() }
+})
+
+let lastCatalogRefresh = 0
+const refreshVisibleCatalog = () => {
+  if (document.visibilityState !== 'visible' || sandboxBusy || Date.now() - lastCatalogRefresh < 15000) return
+  lastCatalogRefresh = Date.now()
+  void loadCatalog()
+}
+window.addEventListener('focus', refreshVisibleCatalog)
+document.addEventListener('visibilitychange', refreshVisibleCatalog)
+window.setInterval(refreshVisibleCatalog, 30000)
 
 updateCartUI()
 
