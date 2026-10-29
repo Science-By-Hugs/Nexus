@@ -36,3 +36,6 @@ Approval applies only to listed choices. Blocked assets cannot be relabeled appr
 
 ## Owner authority update · October 19, 2026
 The owner stated: “The new one that we have created is the source of truth.” The new NEXUS 2.0 portfolio is canonical and supersedes earlier Blue Reactor/celestial visual guidance for NEXUS. This establishes source precedence; it does not silently approve unresolved P01/P03–P08 choices, validate physical packaging, or implement a runtime redesign. P02 app icon visual design is already approved. The canonical repository location is now established, rather than merely recommended.
+
+## Owner decision · October 29, 2026
+P02 app symbol color updated. Anthony found the Muted #A8B0B2 ground with dark Slate #171A1C lettering too dark to pick out on a home screen and chose the Graphite variant: porcelain #F0F1EF lowercase n. on Slate surface #303639. Glyph geometry is unchanged. Applies to the iOS app icon, splash mark, web favicon and touch icons. Platform export QA still applies.
