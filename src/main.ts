@@ -14,6 +14,8 @@ import { marketingPanel, bindMarketing, resetMarketingPreferences } from './mark
 import { avatarMarkup, avatarPanel, bindAvatars } from './avatar'
 import { pushPanel, pushPrompt, bindPushPanel, disablePush } from './push'
 import './slate.css'
+import './ios.css'
+import { showLaunchLoader } from './launchLoader'
 import { registerSW } from 'virtual:pwa-register'
 import { fetchCatalog, type CatalogProduct } from './services/catalog'
 import {
@@ -81,6 +83,7 @@ document.body.prepend(stagingLabel)
 
 const app = document.querySelector<HTMLDivElement>('#app')
 if (!app) throw new Error('App root not found')
+showLaunchLoader()
 
 let products: CatalogProduct[] = []
 let selectedCategory = 'All'
@@ -235,6 +238,7 @@ app.innerHTML = `
   <main class="shell">
     <section id="homeScreen" class="home-screen" aria-labelledby="homeGreeting">
       <div class="home-intro"><h1 id="homeGreeting">Welcome to Nexus.</h1><p>Clear information. Considered choices.</p></div>
+      <button id="homeSearchButton" class="home-search" type="button">${icon('search')}<span>Search catalog</span></button>
       <button id="homeSignInButton" class="home-signin auth-secondary" type="button">Sign in to your account ${icon('chevron')}</button>
       <button id="latestOrderButton" class="latest-order" type="button"><span class="latest-order-copy"><small>Latest order</small><strong id="latestOrderStatus">Sign in to see your orders</strong><span id="latestOrderNumber">Keep your research in one place.</span></span><span class="text-action">View orders ${icon('chevron')}</span></button>
 
@@ -2840,6 +2844,7 @@ mobileCatalogButton.addEventListener('click', () => showMainScreen('catalog'))
 mobileOrdersButton.addEventListener('click', openOrders)
 mobileAccountButton.addEventListener('click', () => { setMobileNavActive('account'); openAccountDialog() })
 for (const id of ['browseCatalogButton']) document.querySelector('#'+id)!.addEventListener('click', () => showMainScreen('catalog'))
+document.querySelector('#homeSearchButton')!.addEventListener('click', () => { showMainScreen('catalog'); searchInput.focus() })
 document.querySelector('#homeSignInButton')!.addEventListener('click', openAccountDialog)
 for (const id of ['latestOrderButton']) document.querySelector('#'+id)!.addEventListener('click', openOrders)
 document.querySelector('.brand')!.addEventListener('click', event => { event.preventDefault(); showMainScreen('home') })
