@@ -1,9 +1,9 @@
 name: V2 staging foundation CI
 on:
   push:
-    branches: ['codex/v2-**']
+    branches: ['IOS-App', staging, 'codex/v2-**']
   pull_request:
-    branches: [main, 'codex/v2-**']
+    branches: [main, 'IOS-App', staging, 'codex/v2-**']
 permissions:
   contents: read
 concurrency:
