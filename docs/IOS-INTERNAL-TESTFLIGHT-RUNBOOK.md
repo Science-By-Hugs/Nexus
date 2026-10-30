@@ -28,7 +28,7 @@ git fetch origin
 git checkout IOS-App
 git pull --ff-only origin IOS-App
 npm ci
-cp .env.example .env.staging.local
+test -f .env.staging.local || cp .env.example .env.staging.local
 ```
 
 Edit `.env.staging.local` locally with the approved staging URL and its **publishable** key, plus:
