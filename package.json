@@ -12,7 +12,8 @@
     "audit:ios-release": "node scripts/audit-ios-release.mjs",
     "build:ios": "VITE_APP_ORIGIN=capacitor://localhost npm run build",
     "ios:sync": "npm run build:ios && cap sync ios",
-    "brand:generate": "node scripts/generate-brand.mjs"
+    "brand:generate": "node scripts/generate-brand.mjs",
+    "verify:ios-internal": "node scripts/verify-ios-internal.mjs"
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",
