@@ -1,13 +1,29 @@
-# NEXUS 2.0 — iOS App Store release readiness
+# NEXUS 2.0 — iOS release roadmap (internal TestFlight first)
 
 **Working branch:** `IOS-App` in `Science-By-Hugs/Nexus`  
 **Baseline:** `main` commit `f98565407003d478e78f1d4d661990a8fe4f79f7` (2026-10-29)  
-**Status:** **NO-GO / preparation only**  
-**Release authority:** An explicit owner approval is required before any production build upload, backend cutover, Apple review submission, or public distribution.
+**Status:** **Internal TestFlight preparation active; external beta/public release deferred**  
+**Release authority:** Internal TestFlight build preparation is authorized. Confirm the existing Apple record before uploading. Separate owner approval is required before external TestFlight, production backend cutover, public App Review, or public distribution.
 
 This document distinguishes confirmed code findings from external checks that have **not** been performed. It is **not** an assertion that the existing TestFlight app or public NEXUS service is safe for release.
 
-## Owner-facing next actions, in priority order
+## Current milestone: INTERNAL TESTFLIGHT ONLY (owner scope correction, October 29, 2026)
+
+**Phase 1 — internal TestFlight is the only active release goal.** Use the existing NEXUS staging environment and synthetic/tester data. Do not switch to a production backend, enable live payments, initiate real Zelle transfers, merge to `main`, create an external TestFlight group, submit for App Review, or publish the app as part of this milestone.
+
+- [ ] Verify the NEXUS App Store Connect record (reported app ID `6822648422`), **exact existing bundle ID**, developer team, app capabilities, processed TestFlight builds, and the Early Internal Testing group. Existing reported build: **2.0.0 (11)**, uploaded October 21; processing and tester availability are still unverified.
+- [ ] Confirm whether the *staging* bundle ID in the repository matches that exact existing App Store Connect record. **Do not change the app ID to an invented production ID.**
+- [ ] Prepare the next internal-only build using the current `IOS-App` code, staging-only config, sandbox/disabled payments, synthetic accounts and non-deploying CI. Determine the next build number from App Store Connect; checked-in Xcode value 10 is not authoritative.
+- [ ] Run `npm test`, `npm run build`, `npm run verify:staging`, `npm run ios:sync`, Xcode signing/archive validation, and iPhone installation/smoke testing. CI compilation with a fake loopback Supabase key does not constitute a usable device build. Run on the actual configured staging backend for device acceptance.
+- [ ] Verify sign-in/Apple login, account recovery, biometric unlock, catalog access, synthetic order/reservation, native return handling, launch visuals, scrolling, keyboard and safe areas, push registration, and failure states. No real payments or unreviewed products.
+- [ ] Upload the signed archive to the **existing** App Store Connect TestFlight record, wait for processing, assign it to **Early Internal Testing**, and confirm an invited internal tester can install and use it.
+- [ ] Obtain owner approval before any later external/public beta step.
+
+**Phase 2 — external TestFlight beta** comes only *after* successful internal acceptance, separate approval, and appropriate product/platform policy review. External TestFlight testing may require Apple's beta review. **Phase 3 — public App Store launch** and production backend/payment cutover are later projects, **not** gates for an internal TestFlight upload.
+
+The full production/public release checklist below is retained for future phases; do not treat its production-only blockers as mandatory before this internal milestone. A staging build is acceptable for the internal milestone when correctly associated with the existing Apple app ID and securely isolated from real services.
+
+## Deferred: production and public App Store readiness
 
 - [ ] **Confirm the existing App Store Connect app record and exact bundle ID.** The earlier release record supplied by the owner is App Store Connect app ID `6822648422`; NEXUS 2.0.0 (11) was reported uploaded to TestFlight on October 21, 2026. Neither record status nor bundle ID has been verified live in this branch audit. Do not guess or replace the bundle ID: an app with an uploaded build cannot change it.
 - [ ] **Create a distinct, reviewed production iOS configuration**, preserving the existing staging build and environment. A production build must use the actual Apple bundle ID, verified signing team/profile, approved backend, accurate public app name, distinct session storage, and explicit production runtime guards. Do not point the existing staging app at production services.
