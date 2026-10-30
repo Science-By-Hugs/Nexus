@@ -34,3 +34,5 @@ jobs:
         run: npm run build
       - name: Verify staging artifact and workflow boundaries
         run: npm run verify:staging
+      - name: Verify internal iOS source and staging isolation (no upload)
+        run: npm run verify:ios-internal -- --code-only
