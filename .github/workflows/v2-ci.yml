@@ -1,9 +1,10 @@
 name: V2 staging foundation CI
 on:
+  # `staging` is the 2.0 integration branch (formerly codex/v2-development).
   push:
-    branches: ['codex/v2-**']
+    branches: [staging]
+  # Every pull request, including stacked PRs.
   pull_request:
-    branches: [main, 'codex/v2-**']
 permissions:
   contents: read
 concurrency:
